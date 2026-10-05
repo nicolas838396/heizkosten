@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block titel %}Übersicht{% endblock %}
+{% block inhalt %}
+<h1>Übersicht</h1>
+<p class="sub">Letzte Funkmeldung: {{ letzter|vor }}{% if letzter %} ({{ letzter|zeit }}){% endif %}</p>
+
+<div class="tiles">
+  <div class="tile"><div class="n">{{ stat.zugeordnet }}<span class="klein"> / {{ stat.gesamt }}</span></div><div class="l">Geräten zugeordnet</div></div>
+  <div class="tile"><div class="n">{{ stat.ok }}</div><div class="l">senden aktuell</div></div>
+  <div class="tile"><div class="n">{{ stat.warn }}</div><div class="l">mit Hinweis</div></div>
+  <div class="tile"><div class="n">{{ neu }}</div><div class="l"><a href="{{ url_for('empfang') }}">neu empfangen</a></div></div>
+</div>
+
+{% if status.log_ok is sameas false and not demo %}
+  <div class="msg warn">Empfangslog nicht lesbar: {{ status.log_fehler }}</div>
+{% endif %}
+
+{% for name, liste in gruppen.items() %}
+  <div class="card">
+    <div class="leiste"><strong>{{ name }}</strong>
+      <a class="btn sek klein" href="{{ url_for('abrechnung') }}">Abrechnung</a></div>
+    {% for p in liste %}
+      <a class="zeile" href="{{ url_for('platz_bearbeiten', pid=p.id) }}" style="color:inherit">
+        <div class="l">
+          <div class="titel">{{ p.raum or p.bezeichnung or '–' }}</div>
+          <div class="meta">{{ 'Heizkostenverteiler' if p.typ == 'HKV' else 'Wärmemengenzähler · Kreis ' ~ p.heizkreis }}{% if p.geraet_id %} · <span class="mono">{{ p.geraet_id }}</span>{% endif %}</div>
+          {% if p.zuletzt %}<div class="meta">Zuletzt: {{ p.zuletzt|vor }}</div>{% endif %}
+        </div>
+        <div class="r"><span class="badge {{ p.status }}">{{ p.status_text }}</span></div>
+      </a>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="card">Noch keine Plätze angelegt. <a href="{{ url_for('plaetze') }}">Plätze anlegen →</a></div>
+{% endfor %}
+{% endblock %}

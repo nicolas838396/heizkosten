@@ -1,0 +1,172 @@
+"""SQLite-Datenhaltung: Wohnungen, Plaetze (Heizkostenverteiler / Waermemengenzaehler),
+empfangene Geraete und Messwerte. Alles wird ueber die Webseite bearbeitet."""
+
+from __future__ import annotations
+
+import datetime as dt
+import os
+import sqlite3
+
+DATA_DIR = os.environ.get(
+    "HEIZKOSTEN_DATA",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data"),
+)
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
+);
+CREATE TABLE IF NOT EXISTS wohnung (
+    id TEXT PRIMARY KEY,
+    bezeichnung TEXT NOT NULL DEFAULT '',
+    flaeche_qm REAL,
+    nutzung TEXT NOT NULL DEFAULT '',
+    sort INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS platz (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    typ TEXT NOT NULL CHECK (typ IN ('HKV', 'WMZ')),
+    wohnung_id TEXT REFERENCES wohnung(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    raum TEXT NOT NULL DEFAULT '',
+    bezeichnung TEXT NOT NULL DEFAULT '',
+    heizkreis TEXT NOT NULL DEFAULT '1',
+    hkv_typ TEXT NOT NULL DEFAULT '',
+    hoehe_cm REAL,
+    laenge_cm REAL,
+    kc_manuell REAL,
+    geraet_id TEXT UNIQUE,
+    aes_key TEXT NOT NULL DEFAULT '',
+    notiz TEXT NOT NULL DEFAULT '',
+    erstellt TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS gesehen (
+    geraet_id TEXT PRIMARY KEY,
+    hersteller TEXT NOT NULL DEFAULT '',
+    version INTEGER,
+    medium INTEGER,
+    erste TEXT NOT NULL,
+    zuletzt TEXT NOT NULL,
+    anzahl INTEGER NOT NULL DEFAULT 1,
+    rssi INTEGER
+);
+CREATE TABLE IF NOT EXISTS messung (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    geraet_id TEXT NOT NULL,
+    ts TEXT NOT NULL,
+    wert REAL NOT NULL,
+    einheit TEXT NOT NULL DEFAULT '',
+    quelle TEXT NOT NULL DEFAULT 'funk',
+    UNIQUE (geraet_id, ts, quelle)
+);
+CREATE INDEX IF NOT EXISTS idx_messung ON messung (geraet_id, ts);
+CREATE TABLE IF NOT EXISTS letzte (
+    geraet_id TEXT PRIMARY KEY,
+    ts TEXT NOT NULL,
+    roh TEXT NOT NULL
+);
+"""
+
+DEFAULT_WOHNUNGEN = [
+    ("EG", "Erdgeschoss", 1),
+    ("1OG", "1. Obergeschoss", 2),
+    ("DG", "Dachgeschoss", 3),
+    ("KELLER", "Kellergeschoss", 4),
+]
+
+DEFAULT_SETTINGS = {
+    "gesamtkosten": "",
+    "verbrauchsanteil": "50",
+    "abrechnung_von": "",
+    "abrechnung_bis": "",
+    "abrechnung_titel": "Heizkostenabrechnung",
+    "objekt": "Mehrfamilienhaus Erlabrunn",
+    "device": "/dev/ttyACM0:iu891a:t1,c1",
+}
+
+
+def now_iso() -> str:
+    return dt.datetime.now().replace(microsecond=0).isoformat()
+
+
+def demo_flag_path() -> str:
+    return os.path.join(DATA_DIR, "demo.flag")
+
+
+def demo_active() -> bool:
+    return os.path.exists(demo_flag_path())
+
+
+def set_demo(active: bool) -> None:
+    os.makedirs(DATA_DIR, exist_ok=True)
+    if active:
+        with open(demo_flag_path(), "w") as f:
+            f.write("1")
+    elif demo_active():
+        os.remove(demo_flag_path())
+
+
+def db_path() -> str:
+    return os.path.join(DATA_DIR, "demo.db" if demo_active() else "heizkosten.db")
+
+
+def connect() -> sqlite3.Connection:
+    os.makedirs(DATA_DIR, exist_ok=True)
+    path = db_path()
+    fresh = not os.path.exists(path)
+    con = sqlite3.connect(path, timeout=15)
+    con.row_factory = sqlite3.Row
+    con.execute("PRAGMA foreign_keys=ON")
+    con.executescript(SCHEMA)
+    if fresh:
+        _seed_defaults(con, demo=demo_active())
+    con.commit()
+    return con
+
+
+def _seed_defaults(con: sqlite3.Connection, demo: bool) -> None:
+    for key, value in DEFAULT_SETTINGS.items():
+        con.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (key, value))
+    if demo:
+        from . import demo as demo_mod
+
+        demo_mod.fill(con)
+        return
+    for wid, bez, sort in DEFAULT_WOHNUNGEN:
+        con.execute(
+            "INSERT OR IGNORE INTO wohnung (id, bezeichnung, sort) VALUES (?, ?, ?)",
+            (wid, bez, sort),
+        )
+    for kreis in ("1", "2"):
+        con.execute(
+            "INSERT INTO platz (typ, raum, bezeichnung, heizkreis, erstellt) VALUES ('WMZ', 'Heizungsraum', ?, ?, ?)",
+            (f"Waermemengenzaehler Heizkreis {kreis}", kreis, now_iso()),
+        )
+
+
+def get_setting(con: sqlite3.Connection, key: str, default: str = "") -> str:
+    row = con.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    if row is None or row["value"] is None:
+        return DEFAULT_SETTINGS.get(key, default)
+    return row["value"]
+
+
+def set_setting(con: sqlite3.Connection, key: str, value: str) -> None:
+    con.execute(
+        "INSERT INTO settings (key, value) VALUES (?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (key, value),
+    )
+
+
+def normalize_id(raw: str) -> str:
+    """Geraete-Nummer vereinheitlichen: Leerzeichen weg, auf 8 Stellen auffuellen, Grossbuchstaben."""
+    s = "".join(ch for ch in (raw or "") if ch.isalnum()).upper()
+    if not s:
+        return ""
+    return s.zfill(8) if len(s) < 8 else s
+
+
+def normalize_key(raw: str) -> str:
+    """AES-Schluessel: nur Hex-Zeichen, Grossbuchstaben (32 Zeichen erwartet)."""
+    return "".join(ch for ch in (raw or "") if ch in "0123456789abcdefABCDEF").upper()

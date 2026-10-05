@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block titel %}{{ 'Platz bearbeiten' if platz.id else 'Neuer Platz' }}{% endblock %}
+{% block inhalt %}
+<h1>{{ 'Platz bearbeiten' if platz.id else 'Neuer Platz' }}</h1>
+<p class="sub">Alle Angaben lassen sich später ändern.</p>
+
+<form method="post" class="card">
+  <div class="row2">
+    <div>
+      <label for="typ">Art</label>
+      <select id="typ" name="typ">
+        <option value="HKV" {{ 'selected' if platz.typ == 'HKV' }}>Heizkostenverteiler</option>
+        <option value="WMZ" {{ 'selected' if platz.typ == 'WMZ' }}>Wärmemengenzähler</option>
+      </select>
+    </div>
+    <div>
+      <label for="wohnung_id">Wohnung</label>
+      <select id="wohnung_id" name="wohnung_id">
+        <option value="">– keine –</option>
+        {% for w in wohnungen %}<option value="{{ w.id }}" {{ 'selected' if platz.wohnung_id == w.id }}>{{ w.bezeichnung or w.id }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div class="row2">
+    <div><label for="raum">Raum / Ort</label><input id="raum" name="raum" value="{{ platz.raum or '' }}" placeholder="z. B. Wohnzimmer"></div>
+    <div><label for="heizkreis">Heizkreis</label><input id="heizkreis" name="heizkreis" value="{{ platz.heizkreis or '1' }}" inputmode="numeric"></div>
+  </div>
+  <label for="bezeichnung">Bezeichnung (optional)</label>
+  <input id="bezeichnung" name="bezeichnung" value="{{ platz.bezeichnung or '' }}" placeholder="z. B. Heizkörper links am Fenster">
+
+  <h2>Heizkörper</h2>
+  <p class="klein">Nur für Heizkostenverteiler. Aus Typ, Höhe und Länge berechnet die Seite den Bewertungsfaktor.</p>
+  <div class="row3">
+    <div>
+      <label for="hkv_typ">Typ</label>
+      <select id="hkv_typ" name="hkv_typ">
+        <option value="">–</option>
+        {% for t in typen %}<option value="{{ t }}" {{ 'selected' if platz.hkv_typ == t }}>{{ t }}</option>{% endfor %}
+      </select>
+    </div>
+    <div><label for="hoehe_cm">Höhe (cm)</label><input id="hoehe_cm" name="hoehe_cm" inputmode="decimal" value="{{ platz.hoehe_cm|zahl(0) if platz.hoehe_cm else '' }}"></div>
+    <div><label for="laenge_cm">Länge (cm)</label><input id="laenge_cm" name="laenge_cm" inputmode="decimal" value="{{ platz.laenge_cm|zahl(0) if platz.laenge_cm else '' }}"></div>
+  </div>
+  <label for="kc_manuell">Bewertungsfaktor manuell (optional, überschreibt die Berechnung)</label>
+  <input id="kc_manuell" name="kc_manuell" inputmode="decimal" value="{{ platz.kc_manuell or '' }}">
+
+  <h2>Gerät</h2>
+  <label for="geraet_id">Geräte-Nummer</label>
+  <input id="geraet_id" name="geraet_id" class="mono" value="{{ platz.geraet_id or '' }}" placeholder="8-stellige Nummer vom Aufkleber" list="frei" autocomplete="off">
+  <datalist id="frei">{% for f in frei %}<option value="{{ f.geraet_id }}">zuletzt {{ f.zuletzt|vor }}</option>{% endfor %}</datalist>
+  {% if frei %}<p class="klein">Zuletzt empfangene, noch freie Geräte stehen als Vorschlag im Feld. Alle: <a href="{{ url_for('empfang') }}">Empfang</a>.</p>{% endif %}
+  <label for="aes_key">AES-Schlüssel (32 Zeichen, falls vorhanden)</label>
+  <input id="aes_key" name="aes_key" class="mono" value="{{ platz.aes_key or '' }}" autocomplete="off" autocapitalize="characters">
+  <label for="notiz">Notiz</label>
+  <input id="notiz" name="notiz" value="{{ platz.notiz or '' }}">
+
+  <div class="aktionen">
+    <button class="btn" type="submit">Speichern</button>
+    <a class="btn sek" href="{{ url_for('plaetze') }}">Abbrechen</a>
+    {% if platz.id %}<a class="btn sek" href="{{ url_for('messwerte', pid=platz.id) }}">Messwerte</a>{% endif %}
+  </div>
+</form>
+{% if platz.id %}
+<form method="post" action="{{ url_for('platz_loeschen', pid=platz.id) }}" onsubmit="return confirm('Diesen Platz wirklich löschen?')">
+  <button class="btn gefahr" type="submit">Platz löschen</button>
+</form>
+{% endif %}
+{% endblock %}

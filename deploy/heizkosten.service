@@ -1,0 +1,14 @@
+[Unit]
+Description=Heizkosten-Webseite
+After=network.target
+
+[Service]
+User=@USER@
+WorkingDirectory=@REPO@
+Environment=HEIZKOSTEN_DATA=@DATA@
+ExecStart=@REPO@/venv/bin/python run.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

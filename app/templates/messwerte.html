@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block titel %}Messwerte{% endblock %}
+{% block inhalt %}
+<h1>Messwerte</h1>
+<p class="sub">{{ platz.raum or platz.bezeichnung or 'Platz' }} · <span class="mono">{{ platz.geraet_id or 'kein Gerät zugeordnet' }}</span>
+ · <a href="{{ url_for('platz_bearbeiten', pid=platz.id) }}">Platz bearbeiten</a></p>
+
+{% if platz.geraet_id %}
+<form method="post" class="card">
+  <strong>Wert von Hand erfassen</strong>
+  <p class="klein">Zum Beispiel ein Zählerstand zum Stichtag, falls Funkdaten fehlen. Gilt wie ein Funkwert.</p>
+  <div class="row2">
+    <div><label for="datum">Datum</label><input id="datum" type="date" name="datum" value="{{ heute }}"></div>
+    <div><label for="wert">Zählerstand ({{ 'kWh' if platz.typ == 'WMZ' else 'Einheiten' }})</label><input id="wert" name="wert" inputmode="decimal"></div>
+  </div>
+  <div class="aktionen"><button class="btn" type="submit">Speichern</button></div>
+</form>
+{% endif %}
+
+{% if roh %}
+<details class="card"><summary>Letztes empfangenes Telegramm (Rohdaten)</summary><pre>{{ roh }}</pre></details>
+{% endif %}
+
+<div class="card">
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Zeitpunkt</th><th class="r">Wert</th><th>Einheit</th><th>Quelle</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr><td>{{ r.ts|zeit }}</td><td class="r">{{ r.wert|zahl(1) }}</td><td>{{ r.einheit }}</td><td class="klein">{{ r.quelle }}</td></tr>
+    {% else %}
+      <tr><td colspan="4" class="klein">Noch keine Messwerte.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

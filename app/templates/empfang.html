@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block titel %}Empfang{% endblock %}
+{% block inhalt %}
+<h1>Empfang</h1>
+<p class="sub">Alle Geräte, deren Funkmeldung der Stick hört. Neue Geräte kannst du direkt einem Platz zuordnen.</p>
+
+<div class="card">
+  <div class="klein">Empfangsdienst (wmbusmeters): <strong>{{ dienst }}</strong><br>
+   Log gelesen: <strong>{{ 'ja' if status.log_ok else ('nein' if status.log_ok is sameas false else 'noch nicht') }}</strong>
+   · letzter Lauf: {{ status.letzter_lauf|zeit }}</div>
+  {% if status.log_fehler and not demo %}<div class="msg warn" style="margin-top:8px">{{ status.log_fehler }}</div>{% endif %}
+</div>
+
+<div class="card">
+  {% for s in gesehen %}
+    <div class="zeile" style="align-items:flex-start">
+      <div class="l">
+        <div class="titel mono" style="font-size:1rem">{{ s.geraet_id }}</div>
+        <div class="meta">{{ s.hersteller or 'Hersteller unbekannt' }} · zuletzt {{ s.zuletzt|vor }} · {{ s.anzahl }} Meldungen{% if s.rssi is not none %} · {{ s.rssi }} dBm{% endif %}</div>
+        {% if s.platz_id %}
+          <div class="meta">Platz: <a href="{{ url_for('platz_bearbeiten', pid=s.platz_id) }}">{{ s.platz_raum or 'Platz' }}</a></div>
+        {% elif frei %}
+          <form method="post" action="{{ url_for('empfang_zuordnen') }}" class="zuordnen">
+            <input type="hidden" name="geraet_id" value="{{ s.geraet_id }}">
+            <select name="platz_id">
+              <option value="">Platz wählen …</option>
+              {% for f in frei %}<option value="{{ f.id }}">{{ f.wohnung or 'ohne Wohnung' }} · {{ f.raum or f.bezeichnung or ('Zähler' if f.typ == 'WMZ' else 'Verteiler') }}{% if f.typ == 'WMZ' %} (WMZ){% endif %}</option>{% endfor %}
+            </select>
+            <button class="btn klein" type="submit">Zuordnen</button>
+          </form>
+        {% else %}<div class="meta">Kein freier Platz vorhanden.</div>{% endif %}
+      </div>
+      <div class="r">{% if s.platz_id %}<span class="badge ok">zugeordnet</span>{% else %}<span class="badge wartet">neu</span>{% endif %}</div>
+    </div>
+  {% else %}
+    <div class="klein">Noch nichts empfangen. Solange keine Zähler in Reichweite senden, bleibt die Liste leer.</div>
+  {% endfor %}
+</div>
+<p class="klein">Tipp: Heizkostenverteiler senden nur alle paar Minuten bis Stunden. Nach der Montage kann es etwas dauern, bis ein Gerät hier erscheint.</p>
+{% endblock %}

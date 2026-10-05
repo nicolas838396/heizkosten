@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block titel %}Plätze{% endblock %}
+{% block inhalt %}
+<h1>Plätze</h1>
+<p class="sub">Hier legst du fest, wo Heizkostenverteiler und Wärmemengenzähler hängen. Alles lässt sich später ändern.</p>
+
+<div class="aktionen" style="margin-top:0;margin-bottom:14px">
+  <a class="btn" href="{{ url_for('platz_neu', typ='HKV') }}">+ Heizkostenverteiler</a>
+  <a class="btn sek" href="{{ url_for('platz_neu', typ='WMZ') }}">+ Wärmemengenzähler</a>
+  <a class="btn sek" href="{{ url_for('wohnungen') }}">Wohnungen &amp; Flächen</a>
+</div>
+
+<details class="card">
+  <summary>Mehrere Plätze auf einmal anlegen</summary>
+  <form method="post" action="{{ url_for('plaetze_schnell') }}">
+    <label for="liste">Eine Zeile pro Wohnung. Hinter dem Raum steht die Anzahl der Heizkörper.</label>
+    <textarea id="liste" name="liste" placeholder="EG: Wohnzimmer 2, Küche, Bad&#10;1. Obergeschoss: Wohnzimmer 2, Schlafzimmer, Kinderzimmer"></textarea>
+    <div class="aktionen"><button class="btn" type="submit">Plätze anlegen</button></div>
+  </form>
+</details>
+
+{% for name, liste in gruppen.items() %}
+  <div class="card">
+    <div class="leiste"><strong>{{ name }}</strong><span class="klein">{{ liste|length }} {{ 'Platz' if liste|length == 1 else 'Plätze' }}</span></div>
+    {% for p in liste %}
+      <a class="zeile" href="{{ url_for('platz_bearbeiten', pid=p.id) }}" style="color:inherit">
+        <div class="l">
+          <div class="titel">{{ p.raum or p.bezeichnung or '–' }}</div>
+          <div class="meta">{{ 'Verteiler' if p.typ == 'HKV' else 'Wärmemengenzähler' }} · Heizkreis {{ p.heizkreis }}{% if p.typ == 'HKV' and p.hkv_typ %} · Typ {{ p.hkv_typ }}, {{ p.hoehe_cm|zahl(0) }}×{{ p.laenge_cm|zahl(0) }} cm{% endif %}</div>
+          <div class="meta">{% if p.geraet_id %}Gerät <span class="mono">{{ p.geraet_id }}</span>{% else %}noch kein Gerät{% endif %}</div>
+        </div>
+        <div class="r"><span class="badge {{ p.status }}">{{ p.status_text }}</span></div>
+      </a>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="card">Noch keine Plätze. Nutze oben „Mehrere Plätze auf einmal anlegen“ oder die Knöpfe.</div>
+{% endfor %}
+{% endblock %}

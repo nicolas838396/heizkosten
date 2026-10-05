@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{% block titel %}Heizkosten{% endblock %} · Heizkosten Erlabrunn</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  {% if demo %}<div class="demo-band">Demo-Ansicht mit Beispieldaten – Ihre echten Daten sind unverändert (Mehr → Demo ausschalten)</div>{% endif %}
+  <nav class="tabs">
+    {% for ep, name in nav %}
+      <a href="{{ url_for(ep) }}" class="{{ 'aktiv' if request.endpoint == ep or (ep == 'plaetze' and request.endpoint in ('platz_neu','platz_bearbeiten','messwerte')) else '' }}">{{ name }}</a>
+    {% endfor %}
+  </nav>
+  <main class="wrap">
+    {% if dirty and not demo %}
+      <div class="banner">Geräte oder Schlüssel wurden geändert. <a href="{{ url_for('einstellungen') }}"><strong>Jetzt an den Empfänger übernehmen</strong></a> (unter „Mehr“).</div>
+    {% endif %}
+    {% with meldungen = get_flashed_messages(with_categories=true) %}
+      {% for kat, text in meldungen %}<div class="msg {{ kat }}">{{ text }}</div>{% endfor %}
+    {% endwith %}
+    {% block inhalt %}{% endblock %}
+  </main>
+</body>
+</html>

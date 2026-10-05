@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block titel %}Abrechnung{% endblock %}
+{% block inhalt %}
+<h1>Abrechnung</h1>
+<p class="sub">Kostenaufteilung nach Heizkostenverordnung, mit PDF je Wohnung.</p>
+
+<form method="post" class="card">
+  <div class="row2">
+    <div><label for="gesamtkosten">Heizkosten gesamt (€)</label><input id="gesamtkosten" name="gesamtkosten" inputmode="decimal" value="{{ einst.gesamtkosten }}" placeholder="z. B. 4850,00"></div>
+    <div><label for="verbrauchsanteil">Verbrauchsanteil (50–70 %)</label><input id="verbrauchsanteil" name="verbrauchsanteil" inputmode="numeric" value="{{ einst.verbrauchsanteil }}"></div>
+  </div>
+  <div class="row2">
+    <div><label for="abrechnung_von">Zeitraum von</label><input id="abrechnung_von" type="date" name="abrechnung_von" value="{{ einst.abrechnung_von }}"></div>
+    <div><label for="abrechnung_bis">Zeitraum bis</label><input id="abrechnung_bis" type="date" name="abrechnung_bis" value="{{ einst.abrechnung_bis }}"></div>
+  </div>
+  <p class="klein">Leer gelassene Daten bedeuten: ab dem ersten bzw. bis zum letzten Messwert.</p>
+  <div class="aktionen"><button class="btn" type="submit">Speichern &amp; berechnen</button></div>
+</form>
+
+{% if fehler %}<div class="msg fehler">{{ fehler }}</div>{% endif %}
+
+{% if ergebnis %}
+  {% for w in ergebnis.warnungen %}<div class="msg warn">{{ w }}</div>{% endfor %}
+  {% if ergebnis.gesamtkosten == 0 %}<div class="msg hinweis">Heizkosten gesamt eingeben, dann erscheinen die Beträge.</div>{% endif %}
+
+  <div class="klein" style="margin:4px 2px 10px">
+    Zeitraum: {{ ergebnis.von|datum or 'ab erstem Messwert' }} – {{ ergebnis.bis|datum or 'letzter Messwert' }}<br>
+    Verbrauchskosten {{ ergebnis.verbrauchstopf|eur }} · Grundkosten {{ ergebnis.grundtopf|eur }}
+  </div>
+
+  {% for w in ergebnis.wohnungen %}
+    <div class="card">
+      <div class="wcard-kopf">
+        <strong>{{ w.bezeichnung or w.id }}</strong>
+        <span class="wcard-summe">{{ w.kosten_gesamt|eur }}</span>
+      </div>
+      <div class="wcard-zeilen">
+        <span class="klein">Verbrauch ({{ w.anteil_verbrauch_prozent|zahl }} %)</span><span>{{ w.kosten_verbrauch|eur }}</span>
+        <span class="klein">Grundkosten ({{ w.anteil_flaeche_prozent|zahl }} %, {{ w.flaeche_qm|zahl }} m²)</span><span>{{ w.kosten_grund|eur }}</span>
+        <span class="klein">Messung</span><span class="klein">{{ w.einheiten|zahl }} Einheiten{% if w.kwh %} · {{ w.kwh|zahl }} kWh{% endif %}</span>
+      </div>
+      <a class="btn" href="{{ url_for('pdf', wid=w.id) }}" target="_blank">PDF erstellen</a>
+    </div>
+  {% endfor %}
+
+  <div class="card">
+    <div class="summe-zeile"><span>Summe aller Wohnungen</span><span>{{ ergebnis.wohnungen|sum(attribute='kosten_gesamt')|eur }}</span></div>
+    {% if ergebnis.nicht_zugeordnet %}<div class="msg warn" style="margin:10px 0 0">Nicht zugeordnet: {{ ergebnis.nicht_zugeordnet|eur }}</div>{% endif %}
+  </div>
+
+  {% if ergebnis.kreise %}
+  <details class="card"><summary>Heizkreise</summary>
+    <div class="scroll"><table style="margin-top:8px">
+      <thead><tr><th>Heizkreis</th><th class="r">Wärmemenge</th><th class="r">Verbrauchskosten</th></tr></thead>
+      <tbody>{% for k in ergebnis.kreise %}<tr><td>{{ k.kreis }}</td><td class="r">{{ k.kwh|zahl }} kWh</td><td class="r">{{ k.kosten|eur }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </details>
+  {% endif %}
+
+  <details class="card"><summary>Messwerte je Gerät im Zeitraum</summary>
+    <div class="scroll">
+    <table style="margin-top:8px">
+      <thead><tr><th>Wohnung / Platz</th><th>Gerät</th><th class="r">Start</th><th class="r">Ende</th><th class="r">Verbrauch</th><th class="r">Faktor</th></tr></thead>
+      <tbody>
+      {% for w in ergebnis.wohnungen %}{% for gd in w.geraete %}
+        <tr>
+          <td>{{ w.id }} · {{ gd.raum or gd.bezeichnung }}{% if gd.typ == 'WMZ' %} (WMZ){% endif %}</td>
+          <td class="mono">{{ gd.geraet_id or '–' }}</td>
+          <td class="r">{{ gd.start[1]|zahl(1) if gd.start else '–' }}</td>
+          <td class="r">{{ gd.ende[1]|zahl(1) if gd.ende else '–' }}</td>
+          <td class="r">{{ gd.verbrauch|zahl(1) if gd.verbrauch is not none else '–' }}</td>
+          <td class="r">{{ gd.kc|zahl(3) if gd.kc else '–' }}</td>
+        </tr>
+        {% set h = ergebnis.hinweise_je_platz.get(gd.id) %}
+        {% if h %}<tr><td colspan="6" class="klein">↳ {{ h|join('; ') }}</td></tr>{% endif %}
+      {% endfor %}{% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </details>
+{% endif %}
+{% endblock %}

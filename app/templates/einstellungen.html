@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block titel %}Mehr{% endblock %}
+{% block inhalt %}
+<h1>Mehr</h1>
+
+<div class="card">
+  <strong>Empfänger übernehmen</strong>
+  <p class="klein">Schreibt die Geräte-Nummern und Schlüssel aller Plätze in die Konfiguration von wmbusmeters und startet den Empfangsdienst neu. Nötig nach jeder Änderung an Geräten oder Schlüsseln.</p>
+  <form method="post"><input type="hidden" name="aktion" value="uebernehmen">
+    <button class="btn" type="submit" {{ 'disabled' if demo }}>Jetzt übernehmen &amp; neu starten</button></form>
+</div>
+
+<div class="card">
+  <strong>Status</strong>
+  <table>
+    <tr><td>Empfangsdienst (wmbusmeters)</td><td class="r">{{ dienst }}</td></tr>
+    <tr><td>Telegramm-Log lesbar</td><td class="r">{{ 'ja' if status.log_ok else ('nein' if status.log_ok is sameas false else 'noch nicht geprüft') }}</td></tr>
+    <tr><td>Messwerte-Ordner lesbar</td><td class="r">{{ 'ja' if status.meter_ok else ('nein' if status.meter_ok is sameas false else 'noch nicht geprüft') }}</td></tr>
+    <tr><td>Letzter Lauf</td><td class="r">{{ status.letzter_lauf|zeit }}</td></tr>
+  </table>
+  {% if status.log_fehler %}<div class="msg warn" style="margin-top:8px">{{ status.log_fehler }}</div>{% endif %}
+  {% if status.meter_fehler %}<div class="msg warn" style="margin-top:8px">{{ status.meter_fehler }}</div>{% endif %}
+  <p class="klein">Datenbank: <span class="mono">{{ db_pfad }}</span></p>
+</div>
+
+<form method="post" class="card">
+  <input type="hidden" name="aktion" value="texte">
+  <strong>Texte für das PDF</strong>
+  <label for="objekt">Objekt</label><input id="objekt" name="objekt" value="{{ objekt }}">
+  <label for="titel">Überschrift</label><input id="titel" name="titel" value="{{ titel }}">
+  <div class="aktionen"><button class="btn sek" type="submit">Speichern</button></div>
+</form>
+
+<div class="card">
+  <strong>Sicherung</strong>
+  <p class="klein">Alle Plätze, Schlüssel und Messwerte in einer Datei. Bitte vor größeren Änderungen und einmal im Jahr sichern.</p>
+  <a class="btn sek" href="{{ url_for('backup') }}">Sicherung herunterladen</a>
+</div>
+
+<div class="card">
+  <strong>Demo-Ansicht</strong>
+  <p class="klein">Zeigt die Seite mit erfundenen Beispieldaten, getrennt von deinen echten Daten.</p>
+  <form method="post"><input type="hidden" name="aktion" value="demo">
+    <input type="hidden" name="an" value="{{ '0' if demo else '1' }}">
+    <button class="btn sek" type="submit">{{ 'Demo ausschalten' if demo else 'Demo einschalten' }}</button></form>
+</div>
+{% endblock %}

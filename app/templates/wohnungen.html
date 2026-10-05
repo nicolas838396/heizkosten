@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block titel %}Wohnungen{% endblock %}
+{% block inhalt %}
+<h1>Wohnungen &amp; Flächen</h1>
+<p class="sub">Die Wohnfläche bestimmt den Grundkostenanteil. Die Reihenfolge steuert die Anzeige.</p>
+
+<form method="post" class="card">
+  {% for w in rows %}
+    <div style="padding:10px 0;border-bottom:1px solid var(--line)">
+      <div class="leiste"><strong>{{ w.id }}</strong><span class="klein">{{ w.plaetze }} Plätze</span></div>
+      <div class="row2">
+        <div><label for="bez_{{ w.id }}">Bezeichnung</label><input id="bez_{{ w.id }}" name="bez_{{ w.id }}" value="{{ w.bezeichnung }}"></div>
+        <div><label for="qm_{{ w.id }}">Wohnfläche (m²)</label><input id="qm_{{ w.id }}" name="qm_{{ w.id }}" inputmode="decimal" value="{{ w.flaeche_qm|zahl(2) if w.flaeche_qm else '' }}"></div>
+      </div>
+      <div class="row2">
+        <div><label for="nutzung_{{ w.id }}">Nutzung (z. B. Mieter, Eigennutzung)</label><input id="nutzung_{{ w.id }}" name="nutzung_{{ w.id }}" value="{{ w.nutzung }}"></div>
+        <div><label for="sort_{{ w.id }}">Reihenfolge</label><input id="sort_{{ w.id }}" name="sort_{{ w.id }}" inputmode="numeric" value="{{ w.sort }}"></div>
+      </div>
+    </div>
+  {% endfor %}
+  <div class="aktionen"><button class="btn" type="submit">Speichern</button></div>
+</form>
+
+<form method="post" action="{{ url_for('wohnung_neu') }}" class="card">
+  <strong>Wohnung hinzufügen</strong>
+  <label for="neu_bez">Bezeichnung</label>
+  <input id="neu_bez" name="bezeichnung" placeholder="z. B. 2. Obergeschoss">
+  <div class="aktionen"><button class="btn sek" type="submit">Hinzufügen</button></div>
+</form>
+
+{% for w in rows %}
+<form method="post" action="{{ url_for('wohnung_loeschen', wid=w.id) }}" style="display:inline" onsubmit="return confirm('Wohnung {{ w.id }} löschen? Ihre Plätze bleiben ohne Wohnung bestehen.')">
+  <button class="btn gefahr klein" type="submit">{{ w.id }} löschen</button>
+</form>
+{% endfor %}
+{% endblock %}
