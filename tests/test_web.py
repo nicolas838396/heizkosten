@@ -13,7 +13,7 @@ from app.web import create_app  # noqa: E402
 class WebTests(unittest.TestCase):
     def setUp(self):
         db.set_demo(False)
-        for name in ("heizkosten.db", "demo.db", "passwort.txt"):
+        for name in ("heizkosten.db", "demo.db", "passwort.txt", "benutzer.txt"):
             p = os.path.join(_TMP, name)
             if os.path.exists(p):
                 os.remove(p)
@@ -124,6 +124,18 @@ class WebTests(unittest.TestCase):
         bad = {"Authorization": "Basic " + base64.b64encode(b"x:falsch").decode()}
         self.assertEqual(self.c.get("/", headers=ok).status_code, 200)
         self.assertEqual(self.c.get("/", headers=bad).status_code, 401)
+
+    def test_benutzername(self):
+        import base64
+        with open(os.path.join(_TMP, "passwort.txt"), "w") as f:
+            f.write("geheim123")
+        with open(os.path.join(_TMP, "benutzer.txt"), "w") as f:
+            f.write("nico")
+        def h(cred):
+            return {"Authorization": "Basic " + base64.b64encode(cred).decode()}
+        self.assertEqual(self.c.get("/", headers=h(b"nico:geheim123")).status_code, 200)
+        self.assertEqual(self.c.get("/", headers=h(b"anderer:geheim123")).status_code, 401)
+        self.assertEqual(self.c.get("/", headers=h(b"nico:falsch")).status_code, 401)
 
     def test_backup(self):
         r = self.c.get("/backup.db")

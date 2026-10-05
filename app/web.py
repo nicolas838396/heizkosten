@@ -46,6 +46,18 @@ def _passwort() -> str:
     return ""
 
 
+def _benutzer() -> str:
+    """Erforderlicher Benutzername (leer = jeder Name ist erlaubt)."""
+    env = os.environ.get("HEIZKOSTEN_BENUTZER", "").strip()
+    if env:
+        return env
+    pfad = os.path.join(db.DATA_DIR, "benutzer.txt")
+    if os.path.exists(pfad):
+        with open(pfad) as f:
+            return f.read().strip()
+    return ""
+
+
 def create_app() -> Flask:
     app = Flask(__name__)
     app.secret_key = _secret_key()
@@ -59,10 +71,15 @@ def create_app() -> Flask:
         if not pw:
             return None
         auth = request.authorization
-        if auth and hmac.compare_digest(auth.password or "", pw):
+        benutzer = _benutzer()
+        if (
+            auth
+            and hmac.compare_digest((auth.password or "").encode(), pw.encode())
+            and (not benutzer or hmac.compare_digest((auth.username or "").encode(), benutzer.encode()))
+        ):
             return None
         return Response(
-            "Bitte anmelden (beliebiger Benutzername, Passwort aus passwort.txt).",
+            "Bitte anmelden mit Benutzername und Passwort.",
             401,
             {"WWW-Authenticate": 'Basic realm="Heizkosten"'},
         )
