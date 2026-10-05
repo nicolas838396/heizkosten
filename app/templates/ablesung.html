@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block titel %}Ablesung{% endblock %}
+{% block inhalt %}
+<h1>Zähler ablesen</h1>
+<p class="sub">Pro Zähler ein Foto machen und den Zählerstand eintippen. Das Foto bleibt als Beleg gespeichert.</p>
+
+{% if not hat_zaehler %}
+<div class="msg hinweis">Zuerst legst du fest, wie viele Zähler jede Wohnung hat. Die Zahlen kannst du später jederzeit ändern.</div>
+{% endif %}
+
+<details class="card" {{ '' if hat_zaehler else 'open' }}>
+  <summary>Zähler anlegen (Anzahl je Wohnung)</summary>
+  <form method="post" action="{{ url_for('zaehler_schnell') }}">
+    <p class="klein">Trag ein, wie viele Warm- und Kaltwasserzähler es je Wohnung gibt. Bereits vorhandene bleiben erhalten. Nicht sicher? Schätz grob, überzählige Zähler lassen sich später löschen.</p>
+    {% for w in wohnungen %}
+    <div class="row2" style="align-items:end">
+      <div><label>{{ w.bezeichnung or w.id }}: Warmwasser</label><input name="warm_{{ w.id }}" inputmode="numeric" placeholder="Anzahl"></div>
+      <div><label>Kaltwasser</label><input name="kalt_{{ w.id }}" inputmode="numeric" placeholder="Anzahl"></div>
+    </div>
+    {% endfor %}
+    <label style="display:flex;gap:8px;align-items:center;font-weight:400;margin-top:14px">
+      <input type="checkbox" name="ww_waerme" value="1" style="width:auto"> Mechanischer Wärmemengenzähler für das Warmwasser im Keller (solange er noch keinen Funk hat)
+    </label>
+    <div class="aktionen"><button class="btn" type="submit">Anlegen</button></div>
+  </form>
+</details>
+
+{% if hat_zaehler %}
+<form method="post" enctype="multipart/form-data">
+  <div class="card">
+    <label for="datum">Datum der Ablesung</label>
+    <input id="datum" type="date" name="datum" value="{{ heute }}">
+    <p class="klein">Für den <strong>Anfangsstand</strong> das Datum des Abrechnungsbeginns wählen (z. B. 01.01.), für den <strong>Endstand</strong> das Datum des Abrechnungsendes. Der Verbrauch ist die Differenz.</p>
+  </div>
+
+  {% for name, wid, liste in gruppen %}{% if liste %}
+  <div class="card">
+    <div class="leiste"><strong>{{ name }}</strong></div>
+    {% for z in liste %}
+    <div style="padding:10px 0;border-top:1px solid var(--line)">
+      <div class="leiste" style="margin-bottom:2px">
+        <span class="platzname">{{ z.bezeichnung or ('Zähler ' ~ z.id) }} <span class="klein">· {{ 'Warm' if z.art == 'WARM' else 'Kalt' }}</span></span>
+        <a class="klein" href="{{ url_for('zaehler_bearbeiten', zid=z.id) }}">Verlauf / ändern</a>
+      </div>
+      <div class="klein">{% if z.letzte %}Zuletzt: {{ z.letzte.wert|zahl(3) }} m³ am {{ z.letzte.datum|datum }}{% else %}Noch keine Ablesung{% endif %}</div>
+      <div class="row2">
+        <div><label for="wert_{{ z.id }}">Zählerstand (m³)</label><input id="wert_{{ z.id }}" name="wert_{{ z.id }}" inputmode="decimal" placeholder="z. B. 123,456"></div>
+        <div><label for="foto_{{ z.id }}">Foto</label><input id="foto_{{ z.id }}" class="fotofeld" type="file" name="foto_{{ z.id }}" accept="image/*" capture="environment"></div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}{% endfor %}
+
+  {% if haus %}
+  <div class="card">
+    <div class="leiste"><strong>Haus (Heizungsraum)</strong></div>
+    {% for z in haus %}
+    <div style="padding:10px 0;border-top:1px solid var(--line)">
+      <div class="leiste" style="margin-bottom:2px">
+        <span class="platzname">{{ z.bezeichnung }}</span>
+        <a class="klein" href="{{ url_for('zaehler_bearbeiten', zid=z.id) }}">Verlauf / ändern</a>
+      </div>
+      <div class="klein">{% if z.letzte %}Zuletzt: {{ z.letzte.wert|zahl(3) }} {{ z.einheit }} am {{ z.letzte.datum|datum }}{% else %}Noch keine Ablesung{% endif %}</div>
+      <div class="row2">
+        <div><label for="wert_{{ z.id }}">Zählerstand ({{ z.einheit }})</label><input id="wert_{{ z.id }}" name="wert_{{ z.id }}" inputmode="decimal"></div>
+        <div><label for="foto_{{ z.id }}">Foto</label><input id="foto_{{ z.id }}" class="fotofeld" type="file" name="foto_{{ z.id }}" accept="image/*" capture="environment"></div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="aktionen">
+    <button class="btn" type="submit" name="weiter" value="1">Speichern &amp; Abrechnung ansehen</button>
+    <button class="btn sek" type="submit">Nur speichern</button>
+  </div>
+</form>
+
+<details class="card" style="margin-top:14px">
+  <summary>Weiteren Zähler hinzufügen</summary>
+  <form method="post" action="{{ url_for('zaehler_neu') }}">
+    <div class="row2">
+      <div><label for="art">Art</label>
+        <select id="art" name="art">{% for k, v in arten.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+      <div><label for="wohnung_id">Wohnung</label>
+        <select id="wohnung_id" name="wohnung_id"><option value="">– Haus –</option>{% for w in wohnungen %}<option value="{{ w.id }}">{{ w.bezeichnung or w.id }}</option>{% endfor %}</select></div>
+    </div>
+    <label for="bezeichnung">Bezeichnung (optional)</label>
+    <input id="bezeichnung" name="bezeichnung" placeholder="z. B. Warmwasser Bad">
+    <div class="aktionen"><button class="btn sek" type="submit">Hinzufügen</button></div>
+  </form>
+</details>
+{% endif %}
+{% endblock %}

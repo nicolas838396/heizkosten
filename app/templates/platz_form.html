@@ -24,7 +24,7 @@
 
   <div class="row2">
     <div><label for="raum">Raum / Ort</label><input id="raum" name="raum" value="{{ platz.raum or '' }}" placeholder="z. B. Wohnzimmer"></div>
-    <div><label for="heizkreis">Heizkreis</label><input id="heizkreis" name="heizkreis" value="{{ platz.heizkreis or '1' }}" inputmode="numeric"></div>
+    <div><label for="heizkreis">Heizkreis (1, 2 … oder WW für Warmwasser)</label><input id="heizkreis" name="heizkreis" value="{{ platz.heizkreis or '1' }}" autocapitalize="characters"></div>
   </div>
   <label for="bezeichnung">Bezeichnung (optional)</label>
   <input id="bezeichnung" name="bezeichnung" value="{{ platz.bezeichnung or '' }}" placeholder="z. B. Heizkörper links am Fenster">

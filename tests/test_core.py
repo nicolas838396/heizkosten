@@ -142,12 +142,83 @@ class BillingTests(unittest.TestCase):
 
     def test_pdf(self):
         plaetze = [hkv(1, "A", 300, kc=1.0), hkv(2, "B", 100, kc=1.0)]
-        r = billing.berechne(self.wohnungen, plaetze, 1000.0, 50)
+        r = billing.berechne_alles(self.wohnungen, plaetze, [], EINST)
         data = report.wohnung_pdf(r, "A", "Testhaus", "Heizkostenabrechnung")
         self.assertTrue(data.startswith(b"%PDF-1.4"))
         self.assertTrue(data.rstrip().endswith(b"%%EOF"))
         with self.assertRaises(KeyError):
             report.wohnung_pdf(r, "X", "Testhaus", "T")
+
+    # ---- Warmwasser / Kaltwasser
+    def test_wasser_kostenbloecke(self):
+        plaetze = [
+            hkv(1, "A", 300, kc=1.0),
+            hkv(2, "B", 100, kc=1.0),
+            {"id": 8, "typ": "WMZ", "wohnung_id": None, "heizkreis": "1", "verbrauch": 8000.0},
+            {"id": 9, "typ": "WMZ", "wohnung_id": None, "heizkreis": "WW", "verbrauch": 2000.0},
+        ]
+        zaehler = [
+            {"id": 1, "art": "WARM", "wohnung_id": "A", "verbrauch": 30.0},
+            {"id": 2, "art": "WARM", "wohnung_id": "A", "verbrauch": 10.0},
+            {"id": 3, "art": "WARM", "wohnung_id": "B", "verbrauch": 40.0},
+            {"id": 4, "art": "KALT", "wohnung_id": "A", "verbrauch": 60.0},
+            {"id": 5, "art": "KALT", "wohnung_id": "B", "verbrauch": 60.0},
+        ]
+        einst = dict(EINST, gesamtkosten=1000.0, wasserkosten=1000.0)
+        r = billing.berechne_alles(self.wohnungen, plaetze, zaehler, einst)
+        wa = r["wasser"]
+        # Warmwasser 2000 von 10000 kWh = 20 % von 1000 = 200
+        self.assertEqual(wa["ww_energie"], 200.0)
+        self.assertEqual(r["gesamtkosten"], 800.0)
+        z = {x["id"]: x for x in r["wohnungen"]}
+        # Wasserpreis 1000 / 200 m3 = 5 EUR; A: 40 m3 warm, 60 kalt; B: 40 warm, 60 kalt
+        self.assertEqual(z["A"]["kalt_kosten"], 300.0)
+        self.assertEqual(z["A"]["ww_wasser"], 200.0)
+        self.assertEqual(z["B"]["ww_wasser"], 200.0)
+        # Energie Warmwasser 200: Verbrauch 70 % = 140, je 70 nach m3 (40/40)
+        self.assertEqual(z["A"]["ww_energie_verbrauch"], 70.0)
+        # Summe aller Wohnungen = Heizenergie + Wasser (nur A und B haben Flaeche/Zaehler)
+        self.assertAlmostEqual(r["summe_haus"], 1000.0 + 1000.0 - r["nicht_zugeordnet"] - 0.0, places=2)
+
+    def test_wasser_formel_ohne_waermezaehler(self):
+        zaehler = [{"id": 1, "art": "WARM", "wohnung_id": "A", "verbrauch": 100.0}]
+        einst = dict(EINST, gesamtkosten=1000.0, ww_pauschal=25.0)
+        plaetze = [hkv(1, "A", 100, kc=1.0)]
+        r = billing.berechne_alles(self.wohnungen, plaetze, zaehler, einst)
+        # 2,5 kWh x 100 m3 x 50 K = 12500 kWh; ohne Heizkreis-kWh gilt der Pauschalanteil 25 %
+        self.assertEqual(r["wasser"]["ww_kwh"], 12500.0)
+        self.assertEqual(r["wasser"]["ww_energie"], 250.0)
+        self.assertTrue(any("Formel" in w for w in r["warnungen"]))
+
+    def test_wasser_handzaehler_mwh(self):
+        zaehler = [{"id": 1, "art": "WW_WAERME", "wohnung_id": None, "einheit": "MWh", "verbrauch": 2.0}]
+        plaetze = [{"id": 8, "typ": "WMZ", "wohnung_id": None, "heizkreis": "1", "verbrauch": 8000.0}]
+        r = billing.berechne_alles(self.wohnungen, plaetze, zaehler, dict(EINST, gesamtkosten=1000.0))
+        self.assertEqual(r["wasser"]["ww_kwh"], 2000.0)
+        self.assertEqual(r["wasser"]["ww_energie"], 200.0)
+
+    def test_wasser_ohne_daten_aendert_heizung_nicht(self):
+        plaetze = [hkv(1, "A", 300, kc=1.0), hkv(2, "B", 100, kc=1.0)]
+        r1 = billing.berechne(self.wohnungen, plaetze, 1000.0, 50)
+        r2 = billing.berechne_alles(self.wohnungen, plaetze, [], dict(EINST, gesamtkosten=1000.0))
+        self.assertEqual(
+            [x["kosten_gesamt"] for x in r1["wohnungen"]], [x["heizung_gesamt"] for x in r2["wohnungen"]]
+        )
+        self.assertEqual(r2["wasser"]["ww_energie"], 0.0)
+
+    def test_ww_verbrauchsanteil_grenzen(self):
+        with self.assertRaises(ValueError):
+            billing.berechne_alles(self.wohnungen, [], [], dict(EINST, ww_verbrauchsanteil=30))
+
+
+EINST = {
+    "gesamtkosten": 1000.0,
+    "wasserkosten": 0.0,
+    "verbrauchsanteil": 50,
+    "ww_verbrauchsanteil": 70,
+    "ww_temperatur": 60.0,
+    "ww_pauschal": None,
+}
 
 
 if __name__ == "__main__":

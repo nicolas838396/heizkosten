@@ -112,3 +112,9 @@ input[type="date"] { min-width: 0; -webkit-appearance: none; appearance: none; }
 .wcard-zeilen span:nth-child(even) { text-align: right; font-variant-numeric: tabular-nums; }
 .zuordnen { display: flex; gap: 6px; margin-top: 8px; }
 .zuordnen select { flex: 1 1 auto; min-width: 0; padding: 8px 10px; }
+
+/* Foto-Eingabe und Kostenbloecke */
+input.fotofeld { padding: 8px; font-size: .85rem; }
+.block { margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--line); }
+.block-kopf { display: flex; justify-content: space-between; gap: 10px; font-weight: 600; }
+.block .wcard-zeilen { margin: 4px 0 2px; }

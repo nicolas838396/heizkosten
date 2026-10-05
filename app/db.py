@@ -65,6 +65,25 @@ CREATE TABLE IF NOT EXISTS letzte (
     ts TEXT NOT NULL,
     roh TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS zaehler (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    art TEXT NOT NULL CHECK (art IN ('WARM', 'KALT', 'WW_WAERME')),
+    wohnung_id TEXT REFERENCES wohnung(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    bezeichnung TEXT NOT NULL DEFAULT '',
+    einheit TEXT NOT NULL DEFAULT 'm³',
+    notiz TEXT NOT NULL DEFAULT '',
+    erstellt TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS ablesung (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    zaehler_id INTEGER NOT NULL REFERENCES zaehler(id) ON DELETE CASCADE,
+    datum TEXT NOT NULL,
+    wert REAL NOT NULL,
+    foto TEXT NOT NULL DEFAULT '',
+    notiz TEXT NOT NULL DEFAULT '',
+    erstellt TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_ablesung ON ablesung (zaehler_id, datum);
 """
 
 DEFAULT_WOHNUNGEN = [
@@ -76,13 +95,28 @@ DEFAULT_WOHNUNGEN = [
 
 DEFAULT_SETTINGS = {
     "gesamtkosten": "",
+    "wasserkosten": "",
     "verbrauchsanteil": "50",
+    "ww_verbrauchsanteil": "70",
+    "ww_temperatur": "60",
+    "ww_pauschal_prozent": "",
     "abrechnung_von": "",
     "abrechnung_bis": "",
-    "abrechnung_titel": "Heizkostenabrechnung",
+    "abrechnung_titel": "Heiz- und Wasserkostenabrechnung",
     "objekt": "Mehrfamilienhaus Erlabrunn",
     "device": "/dev/ttyACM0:iu891a:t1,c1",
 }
+
+
+ZAEHLER_ARTEN = {
+    "WARM": "Warmwasserzähler",
+    "KALT": "Kaltwasserzähler",
+    "WW_WAERME": "Wärmemengenzähler Warmwasser (abgelesen)",
+}
+
+
+def foto_dir() -> str:
+    return os.path.join(DATA_DIR, "demo-fotos" if demo_active() else "fotos")
 
 
 def now_iso() -> str:

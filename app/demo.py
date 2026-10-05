@@ -45,7 +45,9 @@ def fill(con):
     jetzt = dt.datetime.now().replace(microsecond=0).isoformat()
     einst = {
         "gesamtkosten": "4850,00",
+        "wasserkosten": "2310,00",
         "verbrauchsanteil": "60",
+        "ww_verbrauchsanteil": "70",
         "abrechnung_von": "2025-10-01",
         "abrechnung_bis": "2026-09-30",
     }
@@ -119,3 +121,36 @@ def fill(con):
         "VALUES ('HKV', 'EG', 'Flur', 'Heizkoerper Flur (geplant)', '1', '11', 60, 60, ?)",
         (jetzt,),
     )
+
+    # Warmwasser: Funk-Waermemengenzaehler (Heizkreis "WW")
+    con.execute(
+        "INSERT INTO platz (typ, wohnung_id, raum, bezeichnung, heizkreis, geraet_id, aes_key, erstellt) "
+        "VALUES ('WMZ', NULL, 'Heizungsraum', 'Waermemengenzaehler Warmwasser', 'WW', '99100003', '00112233445566778899AABBCCDDEEFF', ?)",
+        (jetzt,),
+    )
+    messung_einfuegen("99100003", verlauf(7400.0), "kWh")
+
+    # Mechanische Wasserzaehler je Wohnung: (Wohnung, Art, Bezeichnung, Anfang, Ende)
+    zaehler = [
+        ("EG", "WARM", "Warmwasser Bad", 112.4, 139.9),
+        ("EG", "WARM", "Warmwasser Kueche", 48.1, 61.0),
+        ("EG", "KALT", "Kaltwasser", 301.2, 372.5),
+        ("1OG", "WARM", "Warmwasser Bad", 90.0, 128.3),
+        ("1OG", "WARM", "Warmwasser Kueche", 40.0, 57.2),
+        ("1OG", "WARM", "Warmwasser Gaestebad", 12.5, 18.9),
+        ("1OG", "KALT", "Kaltwasser", 410.8, 515.1),
+        ("DG", "WARM", "Warmwasser", 70.2, 95.0),
+        ("DG", "KALT", "Kaltwasser", 220.0, 281.6),
+        ("KELLER", "WARM", "Warmwasser", 20.0, 31.5),
+        ("KELLER", "KALT", "Kaltwasser", 88.0, 121.4),
+    ]
+    for wid, art, bez, anfang, ende in zaehler:
+        cur = con.execute(
+            "INSERT INTO zaehler (art, wohnung_id, bezeichnung, einheit, erstellt) VALUES (?, ?, ?, 'm³', ?)",
+            (art, wid, bez, jetzt),
+        )
+        for datum, wert in (("2025-10-01", anfang), ("2026-09-30", ende)):
+            con.execute(
+                "INSERT INTO ablesung (zaehler_id, datum, wert, erstellt) VALUES (?, ?, ?, ?)",
+                (cur.lastrowid, datum, wert, jetzt),
+            )

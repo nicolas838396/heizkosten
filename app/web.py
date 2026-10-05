@@ -8,6 +8,7 @@ import json
 import os
 import sqlite3
 import time
+import uuid
 
 from flask import (
     Flask,
@@ -63,6 +64,7 @@ def _benutzer() -> str:
 def create_app() -> Flask:
     app = Flask(__name__)
     app.secret_key = _secret_key()
+    app.config["MAX_CONTENT_LENGTH"] = 60 * 1024 * 1024
     app.permanent_session_lifetime = dt.timedelta(days=30)
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
@@ -285,7 +287,7 @@ def create_app() -> Flask:
             "wohnung_id": form.get("wohnung_id") or None,
             "raum": form.get("raum", "").strip(),
             "bezeichnung": form.get("bezeichnung", "").strip(),
-            "heizkreis": form.get("heizkreis", "1").strip() or "1",
+            "heizkreis": (form.get("heizkreis", "1").strip() or "1").upper(),
             "hkv_typ": form.get("hkv_typ", "").strip(),
             "hoehe_cm": zahl_oder_none(form.get("hoehe_cm")),
             "laenge_cm": zahl_oder_none(form.get("laenge_cm")),
@@ -496,23 +498,213 @@ def create_app() -> Flask:
         flash("Zugeordnet. Falls das Gerät einen Schlüssel braucht, trag ihn beim Platz ein.", "ok")
         return redirect(url_for("platz_bearbeiten", pid=int(pid)))
 
+    ABR_FELDER = (
+        "gesamtkosten", "wasserkosten", "verbrauchsanteil", "abrechnung_von", "abrechnung_bis",
+        "ww_verbrauchsanteil", "ww_temperatur", "ww_pauschal_prozent",
+    )
+
     @app.route("/abrechnung", methods=["GET", "POST"])
     def abrechnung():
         if request.method == "POST":
-            for key in ("gesamtkosten", "verbrauchsanteil", "abrechnung_von", "abrechnung_bis"):
-                db.set_setting(g.con, key, request.form.get(key, "").strip())
+            for key in ABR_FELDER:
+                if key in request.form:
+                    db.set_setting(g.con, key, request.form.get(key, "").strip())
             flash("Eingaben gespeichert.", "ok")
             return redirect(url_for("abrechnung"))
-        einst = {
-            k: db.get_setting(g.con, k)
-            for k in ("gesamtkosten", "verbrauchsanteil", "abrechnung_von", "abrechnung_bis")
-        }
+        einst = {k: db.get_setting(g.con, k) for k in ABR_FELDER}
         fehler, ergebnis = None, None
         try:
             ergebnis = billing.lade_und_berechne(g.con)
         except ValueError as exc:
             fehler = str(exc)
-        return render_template("abrechnung.html", einst=einst, ergebnis=ergebnis, fehler=fehler)
+        anzahl_zaehler = g.con.execute("SELECT COUNT(*) FROM zaehler").fetchone()[0]
+        return render_template(
+            "abrechnung.html", einst=einst, ergebnis=ergebnis, fehler=fehler, anzahl_zaehler=anzahl_zaehler
+        )
+
+    # ---------- Wasserzaehler und Ablesung (Foto + Zahl) ----------
+    FOTO_ENDUNGEN = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"}
+
+    def speichere_foto(datei, ablesung_id):
+        if datei is None or not datei.filename:
+            return ""
+        endung = os.path.splitext(datei.filename)[1].lower()
+        if endung not in FOTO_ENDUNGEN:
+            endung = ".jpg"
+        name = f"a{ablesung_id}_{uuid.uuid4().hex[:8]}{endung}"
+        os.makedirs(db.foto_dir(), exist_ok=True)
+        datei.save(os.path.join(db.foto_dir(), name))
+        return name
+
+    def lade_zaehler_mit_letzter():
+        wohnungen = g.con.execute("SELECT * FROM wohnung ORDER BY sort, id").fetchall()
+        zaehler = []
+        for z in g.con.execute("SELECT * FROM zaehler ORDER BY art DESC, id"):
+            d = dict(z)
+            letzte = g.con.execute(
+                "SELECT datum, wert FROM ablesung WHERE zaehler_id = ? ORDER BY datum DESC, id DESC LIMIT 1",
+                (z["id"],),
+            ).fetchone()
+            d["letzte"] = dict(letzte) if letzte else None
+            zaehler.append(d)
+        return wohnungen, zaehler
+
+    @app.route("/ablesung", methods=["GET", "POST"])
+    def ablesung():
+        wohnungen, zaehler = lade_zaehler_mit_letzter()
+        if request.method == "POST":
+            datum = request.form.get("datum", "").strip() or dt.date.today().isoformat()
+            try:
+                dt.date.fromisoformat(datum)
+            except ValueError:
+                flash("Datum ungültig.", "fehler")
+                return redirect(url_for("ablesung"))
+            gespeichert, auffaellig = 0, []
+            for z in zaehler:
+                wert = zahl_oder_none(request.form.get(f"wert_{z['id']}"))
+                if wert is None:
+                    continue
+                if z["letzte"] and wert < z["letzte"]["wert"] and z["letzte"]["datum"] <= datum:
+                    auffaellig.append(z["bezeichnung"] or f"Zähler {z['id']}")
+                cur = g.con.execute(
+                    "INSERT INTO ablesung (zaehler_id, datum, wert, erstellt) VALUES (?, ?, ?, ?)",
+                    (z["id"], datum, wert, db.now_iso()),
+                )
+                foto = speichere_foto(request.files.get(f"foto_{z['id']}"), cur.lastrowid)
+                if foto:
+                    g.con.execute("UPDATE ablesung SET foto = ? WHERE id = ?", (foto, cur.lastrowid))
+                gespeichert += 1
+            if not gespeichert:
+                flash("Keine Zählerstände eingetragen.", "hinweis")
+                return redirect(url_for("ablesung"))
+            flash(f"{gespeichert} Zählerstand/-stände gespeichert.", "ok")
+            if auffaellig:
+                flash("Stand niedriger als der vorherige bei: " + ", ".join(auffaellig) + ". Bitte prüfen.", "hinweis")
+            return redirect(url_for("abrechnung") if request.form.get("weiter") else url_for("ablesung"))
+        gruppen = []
+        for w in wohnungen:
+            gruppen.append((w["bezeichnung"] or w["id"], w["id"], [z for z in zaehler if z["wohnung_id"] == w["id"]]))
+        haus = [z for z in zaehler if not z["wohnung_id"]]
+        return render_template(
+            "ablesung.html",
+            gruppen=gruppen,
+            haus=haus,
+            wohnungen=wohnungen,
+            heute=dt.date.today().isoformat(),
+            arten=db.ZAEHLER_ARTEN,
+            hat_zaehler=bool(zaehler),
+        )
+
+    @app.route("/zaehler/schnell", methods=["POST"])
+    def zaehler_schnell():
+        neu = 0
+        for w in g.con.execute("SELECT id, bezeichnung FROM wohnung ORDER BY sort, id").fetchall():
+            for art, feld, name in (("WARM", "warm", "Warmwasser"), ("KALT", "kalt", "Kaltwasser")):
+                soll = int(zahl_oder_none(request.form.get(f"{feld}_{w['id']}")) or 0)
+                soll = max(0, min(soll, 10))
+                haben = g.con.execute(
+                    "SELECT COUNT(*) FROM zaehler WHERE art = ? AND wohnung_id = ?", (art, w["id"])
+                ).fetchone()[0]
+                for i in range(haben + 1, soll + 1):
+                    g.con.execute(
+                        "INSERT INTO zaehler (art, wohnung_id, bezeichnung, einheit, erstellt) VALUES (?, ?, ?, 'm³', ?)",
+                        (art, w["id"], f"{name} {i}", db.now_iso()),
+                    )
+                    neu += 1
+        if request.form.get("ww_waerme"):
+            if not g.con.execute("SELECT 1 FROM zaehler WHERE art = 'WW_WAERME'").fetchone():
+                g.con.execute(
+                    "INSERT INTO zaehler (art, wohnung_id, bezeichnung, einheit, erstellt) "
+                    "VALUES ('WW_WAERME', NULL, 'Wärmemengenzähler Warmwasser', 'kWh', ?)",
+                    (db.now_iso(),),
+                )
+                neu += 1
+        flash(f"{neu} Zähler angelegt." if neu else "Nichts Neues angelegt.", "ok" if neu else "hinweis")
+        return redirect(url_for("ablesung"))
+
+    @app.route("/zaehler/neu", methods=["POST"])
+    def zaehler_neu():
+        art = request.form.get("art", "WARM")
+        if art not in db.ZAEHLER_ARTEN:
+            art = "WARM"
+        wid = request.form.get("wohnung_id") or None
+        if art == "WW_WAERME":
+            wid = None
+        einheit = "kWh" if art == "WW_WAERME" else "m³"
+        bez = request.form.get("bezeichnung", "").strip() or db.ZAEHLER_ARTEN[art].split(" (")[0]
+        cur = g.con.execute(
+            "INSERT INTO zaehler (art, wohnung_id, bezeichnung, einheit, erstellt) VALUES (?, ?, ?, ?, ?)",
+            (art, wid, bez, einheit, db.now_iso()),
+        )
+        flash("Zähler angelegt.", "ok")
+        return redirect(url_for("zaehler_bearbeiten", zid=cur.lastrowid))
+
+    @app.route("/zaehler/<int:zid>", methods=["GET", "POST"])
+    def zaehler_bearbeiten(zid):
+        z = g.con.execute("SELECT * FROM zaehler WHERE id = ?", (zid,)).fetchone()
+        if z is None:
+            abort(404)
+        if request.method == "POST":
+            einheit = request.form.get("einheit", z["einheit"])
+            if z["art"] == "WW_WAERME" and einheit not in ("kWh", "MWh", "GJ"):
+                einheit = "kWh"
+            if z["art"] != "WW_WAERME":
+                einheit = "m³"
+            g.con.execute(
+                "UPDATE zaehler SET bezeichnung=?, wohnung_id=?, einheit=?, notiz=? WHERE id=?",
+                (
+                    request.form.get("bezeichnung", "").strip(),
+                    (request.form.get("wohnung_id") or None) if z["art"] != "WW_WAERME" else None,
+                    einheit,
+                    request.form.get("notiz", "").strip(),
+                    zid,
+                ),
+            )
+            flash("Gespeichert.", "ok")
+            return redirect(url_for("zaehler_bearbeiten", zid=zid))
+        wohnungen = g.con.execute("SELECT * FROM wohnung ORDER BY sort, id").fetchall()
+        hist = g.con.execute(
+            "SELECT * FROM ablesung WHERE zaehler_id = ? ORDER BY datum DESC, id DESC", (zid,)
+        ).fetchall()
+        return render_template(
+            "zaehler.html", z=z, wohnungen=wohnungen, hist=hist, arten=db.ZAEHLER_ARTEN
+        )
+
+    @app.route("/zaehler/<int:zid>/loeschen", methods=["POST"])
+    def zaehler_loeschen(zid):
+        for r in g.con.execute("SELECT foto FROM ablesung WHERE zaehler_id = ?", (zid,)).fetchall():
+            if r["foto"]:
+                try:
+                    os.remove(os.path.join(db.foto_dir(), os.path.basename(r["foto"])))
+                except OSError:
+                    pass
+        g.con.execute("DELETE FROM zaehler WHERE id = ?", (zid,))
+        flash("Zähler samt Ablesungen gelöscht.", "ok")
+        return redirect(url_for("ablesung"))
+
+    @app.route("/ablesung/<int:aid>/loeschen", methods=["POST"])
+    def ablesung_loeschen(aid):
+        r = g.con.execute("SELECT zaehler_id, foto FROM ablesung WHERE id = ?", (aid,)).fetchone()
+        if r is None:
+            abort(404)
+        if r["foto"]:
+            try:
+                os.remove(os.path.join(db.foto_dir(), os.path.basename(r["foto"])))
+            except OSError:
+                pass
+        g.con.execute("DELETE FROM ablesung WHERE id = ?", (aid,))
+        flash("Ablesung gelöscht.", "ok")
+        return redirect(url_for("zaehler_bearbeiten", zid=r["zaehler_id"]))
+
+    @app.route("/foto/<int:aid>")
+    def foto(aid):
+        r = g.con.execute("SELECT foto FROM ablesung WHERE id = ?", (aid,)).fetchone()
+        if r is None or not r["foto"]:
+            abort(404)
+        pfad = os.path.join(db.foto_dir(), os.path.basename(r["foto"]))
+        if not os.path.exists(pfad):
+            abort(404)
+        return send_file(pfad)
 
     @app.route("/pdf/<wid>.pdf")
     def pdf(wid):
@@ -532,7 +724,7 @@ def create_app() -> Flask:
         return Response(
             data,
             mimetype="application/pdf",
-            headers={"Content-Disposition": f'inline; filename="Heizkostenabrechnung_{wid}.pdf"'},
+            headers={"Content-Disposition": f'inline; filename="Abrechnung_{wid}.pdf"'},
         )
 
     @app.route("/einstellungen", methods=["GET", "POST"])

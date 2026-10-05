@@ -18,6 +18,14 @@ Hinweis: Läuft die Installation im Raspberry-Pi-Connect-Browserterminal, kann d
 abbrechen. Dann stattdessen: `sudo systemd-run --unit=hk-install --collect --working-directory=$PWD bash deploy/install.sh`
 und das Ergebnis mit `sudo journalctl -u hk-install --no-pager | tail -20` ansehen.
 
+## Ablauf einer Abrechnung
+
+1. Abrechnung: Heizenergie- und Wasserkosten sowie Zeitraum eintragen.
+2. Zähler ablesen: je Wasserzähler Foto machen und Stand eintippen (Anfangs- und Endstand mit jeweiligem Datum).
+3. Ergebnis: Heizung, Warmwasser und Kaltwasser je Wohnung, dazu ein PDF je Wohnung.
+
+Wärmemengenzähler für das Warmwasser: als Platz mit Heizkreis `WW` anlegen (Funk), bis dahin als abgelesener Zähler.
+
 ## Aufbau
 
 - `app/` Flask-Anwendung (SQLite in `/var/lib/heizkosten`), Sammler-Thread liest alle 30 s Log und Messwertdateien

@@ -21,7 +21,7 @@ class WebTests(unittest.TestCase):
         self.c = self.app.test_client()
 
     def test_leere_installation(self):
-        for url in ("/", "/plaetze", "/wohnungen", "/empfang", "/abrechnung", "/einstellungen", "/platz/neu"):
+        for url in ("/", "/plaetze", "/wohnungen", "/empfang", "/abrechnung", "/einstellungen", "/platz/neu", "/ablesung"):
             r = self.c.get(url)
             self.assertEqual(r.status_code, 200, url)
         self.assertIn("Erdgeschoss", self.c.get("/wohnungen").get_data(as_text=True))
@@ -84,7 +84,10 @@ class WebTests(unittest.TestCase):
         con = db.connect()
         from app import billing
         r = billing.lade_und_berechne(con)
-        self.assertEqual(round(sum(w["kosten_gesamt"] for w in r["wohnungen"]), 2), 4850.0)
+        # Heizenergie 4850 = Heizung + Warmwasser-Energie; dazu 2310 Wasser/Abwasser
+        heizung = sum(w["heizung_gesamt"] for w in r["wohnungen"])
+        self.assertAlmostEqual(heizung + r["wasser"]["ww_energie"], 4850.0, places=2)
+        self.assertAlmostEqual(r["summe_haus"], 4850.0 + 2310.0, places=2)
         con.close()
         self.c.post("/einstellungen", data={"aktion": "demo", "an": "0"})
         self.assertFalse(db.demo_active())
@@ -155,6 +158,54 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.c.get("/", headers=html).status_code, 200)
         self.c.get("/abmelden")
         self.assertEqual(self.c.get("/", headers=html).status_code, 302)
+
+    def test_ablesung_mit_foto_und_abrechnung(self):
+        import io
+        # Zaehler anlegen: EG 2 warm, 1 kalt; WW-Waermezaehler
+        r = self.c.post("/zaehler/schnell", data={"warm_EG": "2", "kalt_EG": "1", "ww_waerme": "1"}, follow_redirects=True)
+        self.assertIn("4 Zähler angelegt", r.get_data(as_text=True))
+        # nochmal mit gleicher Anzahl: nichts Neues
+        r = self.c.post("/zaehler/schnell", data={"warm_EG": "2"}, follow_redirects=True)
+        self.assertIn("Nichts Neues", r.get_data(as_text=True))
+        con = db.connect()
+        ids = {(z["art"], z["bezeichnung"]): z["id"] for z in con.execute("SELECT * FROM zaehler")}
+        con.close()
+        warm1 = ids[("WARM", "Warmwasser 1")]
+        kalt1 = ids[("KALT", "Kaltwasser 1")]
+        for datum, wert in (("2025-01-01", "10,5"), ("2025-12-31", "60,5")):
+            data = {
+                "datum": datum,
+                f"wert_{warm1}": wert,
+                f"wert_{kalt1}": "100",
+                f"foto_{warm1}": (io.BytesIO(b"\xff\xd8\xffFAKEJPEG"), "bild.jpg"),
+            }
+            r = self.c.post("/ablesung", data=data, content_type="multipart/form-data", follow_redirects=True)
+            self.assertIn("gespeichert", r.get_data(as_text=True))
+        con = db.connect()
+        a = con.execute("SELECT * FROM ablesung WHERE zaehler_id = ? ORDER BY datum", (warm1,)).fetchall()
+        self.assertEqual([x["wert"] for x in a], [10.5, 60.5])
+        self.assertTrue(a[0]["foto"].endswith(".jpg"))
+        self.assertEqual(self.c.get(f"/foto/{a[0]['id']}").data, b"\xff\xd8\xffFAKEJPEG")
+        con.close()
+        # Abrechnung: 50 m3 warm im Zeitraum
+        self.c.post("/abrechnung", data={"wasserkosten": "500", "gesamtkosten": "1000", "abrechnung_von": "2025-01-01", "abrechnung_bis": "2025-12-31"})
+        r = self.c.get("/abrechnung")
+        text = r.get_data(as_text=True)
+        self.assertIn("Warmwasser", text)
+        self.assertIn("50,000 m³", text)
+        pdf = self.c.get("/pdf/EG.pdf")
+        self.assertEqual(pdf.status_code, 200)
+        self.assertTrue(pdf.data.startswith(b"%PDF"))
+        # Ablesung loeschen entfernt Foto
+        self.c.post(f"/ablesung/{a[0]['id']}/loeschen")
+        self.assertEqual(self.c.get(f"/foto/{a[0]['id']}").status_code, 404)
+
+    def test_demo_mit_wasser(self):
+        self.c.post("/einstellungen", data={"aktion": "demo", "an": "1"})
+        text = self.c.get("/abrechnung").get_data(as_text=True)
+        self.assertIn("Kaltwasser", text)
+        self.assertEqual(self.c.get("/pdf/1OG.pdf").status_code, 200)
+        self.c.post("/einstellungen", data={"aktion": "demo", "an": "0"})
 
     def test_backup(self):
         r = self.c.get("/backup.db")

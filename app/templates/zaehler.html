@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block titel %}Zähler{% endblock %}
+{% block inhalt %}
+<h1>{{ z.bezeichnung or 'Zähler' }}</h1>
+<p class="sub">{{ arten[z.art] }}</p>
+
+<form method="post" class="card">
+  <label for="bezeichnung">Bezeichnung</label>
+  <input id="bezeichnung" name="bezeichnung" value="{{ z.bezeichnung }}">
+  {% if z.art != 'WW_WAERME' %}
+  <label for="wohnung_id">Wohnung</label>
+  <select id="wohnung_id" name="wohnung_id">
+    <option value="">– keine –</option>
+    {% for w in wohnungen %}<option value="{{ w.id }}" {{ 'selected' if z.wohnung_id == w.id }}>{{ w.bezeichnung or w.id }}</option>{% endfor %}
+  </select>
+  {% else %}
+  <label for="einheit">Einheit auf dem Zähler</label>
+  <select id="einheit" name="einheit">{% for e in ('kWh', 'MWh', 'GJ') %}<option {{ 'selected' if z.einheit == e }}>{{ e }}</option>{% endfor %}</select>
+  {% endif %}
+  <label for="notiz">Notiz</label>
+  <input id="notiz" name="notiz" value="{{ z.notiz }}" placeholder="z. B. Zählernummer, Ort">
+  <div class="aktionen">
+    <button class="btn" type="submit">Speichern</button>
+    <a class="btn sek" href="{{ url_for('ablesung') }}">Zurück</a>
+  </div>
+</form>
+
+<div class="card">
+  <strong>Ablesungen</strong>
+  {% for h in hist %}
+  <div class="zeile">
+    <div class="l">
+      <div class="titel">{{ h.wert|zahl(3) }} {{ z.einheit }}</div>
+      <div class="meta">{{ h.datum|datum }}{% if h.foto %} · <a href="{{ url_for('foto', aid=h.id) }}" target="_blank">Foto ansehen</a>{% endif %}</div>
+    </div>
+    <div class="r">
+      <form method="post" action="{{ url_for('ablesung_loeschen', aid=h.id) }}" onsubmit="return confirm('Diese Ablesung löschen?')">
+        <button class="btn gefahr klein" type="submit">Löschen</button>
+      </form>
+    </div>
+  </div>
+  {% else %}<p class="klein">Noch keine Ablesung.</p>{% endfor %}
+</div>
+
+<form method="post" action="{{ url_for('zaehler_loeschen', zid=z.id) }}" onsubmit="return confirm('Zähler samt allen Ablesungen löschen?')">
+  <button class="btn gefahr klein" type="submit">Zähler löschen</button>
+</form>
+{% endblock %}
