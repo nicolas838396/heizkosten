@@ -7,6 +7,7 @@ import hmac
 import json
 import os
 import sqlite3
+import time
 
 from flask import (
     Flask,
@@ -18,6 +19,7 @@ from flask import (
     render_template,
     request,
     send_file,
+    session,
     url_for,
 )
 
@@ -61,28 +63,60 @@ def _benutzer() -> str:
 def create_app() -> Flask:
     app = Flask(__name__)
     app.secret_key = _secret_key()
+    app.permanent_session_lifetime = dt.timedelta(days=30)
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
-    # ---------- Zugriffsschutz (Passwort aus passwort.txt, falls vorhanden) ----------
+    # ---------- Zugriffsschutz: Anmeldeseite (Cookie) oder HTTP-Basic fuer Programme ----------
+    OFFEN = ("health", "static", "favicon", "anmelden", "abmelden")
+
+    def _token(benutzer: str, pw: str) -> str:
+        return hmac.new(
+            app.secret_key.encode(), f"{benutzer}\0{pw}".encode(), "sha256"
+        ).hexdigest()
+
+    def _zugangsdaten_ok(name: str, pw_eingabe: str) -> bool:
+        pw = _passwort()
+        benutzer = _benutzer()
+        return hmac.compare_digest(pw_eingabe.encode(), pw.encode()) and (
+            not benutzer or hmac.compare_digest(name.encode(), benutzer.encode())
+        )
+
     @app.before_request
     def pruefe_passwort():
-        if request.endpoint in ("health", "static", "favicon"):
+        if request.endpoint in OFFEN:
             return None
         pw = _passwort()
         if not pw:
             return None
         auth = request.authorization
-        benutzer = _benutzer()
-        if (
-            auth
-            and hmac.compare_digest((auth.password or "").encode(), pw.encode())
-            and (not benutzer or hmac.compare_digest((auth.username or "").encode(), benutzer.encode()))
-        ):
+        if auth and _zugangsdaten_ok(auth.username or "", auth.password or ""):
             return None
+        tok = session.get("zugang")
+        if tok and hmac.compare_digest(str(tok), _token(_benutzer(), pw)):
+            return None
+        if "text/html" in request.headers.get("Accept", ""):
+            return redirect(url_for("anmelden"))
         return Response(
-            "Bitte anmelden mit Benutzername und Passwort.",
-            401,
-            {"WWW-Authenticate": 'Basic realm="Heizkosten"'},
+            "Anmeldung erforderlich.", 401, {"WWW-Authenticate": 'Basic realm="Heizkosten"'}
         )
+
+    @app.route("/anmelden", methods=["GET", "POST"])
+    def anmelden():
+        fehler = None
+        if request.method == "POST":
+            if _zugangsdaten_ok(request.form.get("benutzer", "").strip(), request.form.get("passwort", "")):
+                session.clear()
+                session["zugang"] = _token(_benutzer(), _passwort())
+                session.permanent = True
+                return redirect(url_for("index"))
+            time.sleep(1)
+            fehler = "Benutzername oder Passwort stimmt nicht."
+        return render_template("login.html", fehler=fehler, benutzer_noetig=bool(_benutzer()))
+
+    @app.route("/abmelden")
+    def abmelden():
+        session.clear()
+        return redirect(url_for("anmelden"))
 
     @app.before_request
     def open_db():

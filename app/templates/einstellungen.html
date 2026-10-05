@@ -44,4 +44,10 @@
     <input type="hidden" name="an" value="{{ '0' if demo else '1' }}">
     <button class="btn sek" type="submit">{{ 'Demo ausschalten' if demo else 'Demo einschalten' }}</button></form>
 </div>
+
+<div class="card">
+  <strong>Abmelden</strong>
+  <p class="klein">Beendet die Anmeldung auf diesem Gerät.</p>
+  <a class="btn sek" href="{{ url_for('abmelden') }}">Abmelden</a>
+</div>
 {% endblock %}

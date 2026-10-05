@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Anmelden · Heizkosten Erlabrunn</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="wrap" style="max-width:420px;padding-top:12vh">
+    <h1>Heizkosten Erlabrunn</h1>
+    <p class="sub">Bitte anmelden.</p>
+    {% if fehler %}<div class="msg fehler">{{ fehler }}</div>{% endif %}
+    <form method="post" class="card">
+      {% if benutzer_noetig %}
+      <label for="benutzer">Benutzername</label>
+      <input id="benutzer" name="benutzer" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" autofocus>
+      {% endif %}
+      <label for="passwort">Passwort</label>
+      <input id="passwort" name="passwort" type="password" autocomplete="current-password">
+      <div class="aktionen"><button class="btn" type="submit">Anmelden</button></div>
+    </form>
+  </main>
+</body>
+</html>

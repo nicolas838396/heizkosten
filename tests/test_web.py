@@ -137,6 +137,25 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.c.get("/", headers=h(b"anderer:geheim123")).status_code, 401)
         self.assertEqual(self.c.get("/", headers=h(b"nico:falsch")).status_code, 401)
 
+    def test_anmeldeseite_und_abmelden(self):
+        with open(os.path.join(_TMP, "passwort.txt"), "w") as f:
+            f.write("geheim123")
+        with open(os.path.join(_TMP, "benutzer.txt"), "w") as f:
+            f.write("birgitgold")
+        html = {"Accept": "text/html"}
+        r = self.c.get("/", headers=html)
+        self.assertEqual(r.status_code, 302)
+        self.assertIn("/anmelden", r.headers["Location"])
+        self.assertEqual(self.c.get("/anmelden").status_code, 200)
+        r = self.c.post("/anmelden", data={"benutzer": "x", "passwort": "geheim123"})
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("stimmt nicht", r.get_data(as_text=True))
+        r = self.c.post("/anmelden", data={"benutzer": "birgitgold", "passwort": "geheim123"})
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(self.c.get("/", headers=html).status_code, 200)
+        self.c.get("/abmelden")
+        self.assertEqual(self.c.get("/", headers=html).status_code, 302)
+
     def test_backup(self):
         r = self.c.get("/backup.db")
         self.assertEqual(r.status_code, 200)
