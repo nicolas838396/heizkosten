@@ -77,6 +77,6 @@ sudo systemctl restart heizkosten
 
 IP="$(hostname -I | awk '{print $1}')"
 echo
-echo "Fertig. Webseite:  http://$IP:8080   (oder http://$(hostname).local:8080)"
+echo "Fertig. Webseite:  http://$IP   (oder http://$(hostname).local)"
 echo "Passwort:          $(cat "$DATEN/passwort.txt")"
 [ -n "${NEU:-}" ] && echo "(Benutzername beliebig, nur das Passwort zählt. Es liegt in $DATEN/passwort.txt)"

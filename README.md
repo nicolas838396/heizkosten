@@ -12,7 +12,7 @@ cd heizkosten
 bash deploy/install.sh
 ```
 
-Am Ende zeigt das Skript Adresse und Passwort an. Aufruf im Browser: `http://<Pi-IP>:8080`.
+Am Ende zeigt das Skript Adresse und Passwort an. Aufruf im Browser: `http://<Pi-IP>`.
 
 Hinweis: Läuft die Installation im Raspberry-Pi-Connect-Browserterminal, kann die Verbindung kurz
 abbrechen. Dann stattdessen: `sudo systemd-run --unit=hk-install --collect --working-directory=$PWD bash deploy/install.sh`
