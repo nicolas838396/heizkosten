@@ -93,17 +93,30 @@ def berechne(wohnungen: list, plaetze: list, gesamtkosten: float, verbrauchsante
     hkv = [p for p in plaetze if p["typ"] == "HKV"]
     auto = bewertungsfaktoren(
         [
-            {"id": p["id"], "typ": p["hkv_typ"], "hoehe_cm": p["hoehe_cm"], "laenge_cm": p["laenge_cm"]}
+            {
+                "id": p["id"],
+                "typ": p["hkv_typ"],
+                "hoehe_cm": p["hoehe_cm"],
+                "laenge_cm": p["laenge_cm"],
+                "leistung_w": p.get("leistung_w"),
+            }
             for p in hkv
-            if p.get("hkv_typ") and p.get("hoehe_cm") and p.get("laenge_cm")
+            if p.get("leistung_w") or (p.get("hkv_typ") and p.get("hoehe_cm") and p.get("laenge_cm"))
         ]
     )
     ohne_faktor = 0
+    mit_watt = [p for p in hkv if p.get("leistung_w")]
+    ohne_watt = [p for p in hkv if not p.get("leistung_w") and not p.get("kc_manuell")]
+    if mit_watt and ohne_watt:
+        warnungen.append(
+            f"{len(mit_watt)} Heizkoerper mit Watt-Angabe, {len(ohne_watt)} nur mit Typ/Masse: "
+            "Die Werte stammen aus verschiedenen Quellen und sind evtl. nicht vergleichbar."
+        )
     for p in hkv:
         if p.get("kc_manuell"):
             p["kc"], p["kc_quelle"] = float(p["kc_manuell"]), "manuell"
         elif p["id"] in auto:
-            p["kc"], p["kc_quelle"] = auto[p["id"]], "berechnet"
+            p["kc"], p["kc_quelle"] = auto[p["id"]], ("aus Watt" if p.get("leistung_w") else "berechnet")
         else:
             p["kc"], p["kc_quelle"] = 1.0, "Standard"
             ohne_faktor += 1

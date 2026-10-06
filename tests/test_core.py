@@ -221,5 +221,19 @@ EINST = {
 }
 
 
+class WattTests(unittest.TestCase):
+    def test_watt_ersetzt_masse(self):
+        f = bewertungsfaktoren(
+            [
+                {"id": 1, "leistung_w": 407},
+                {"id": 2, "leistung_w": 814},
+                {"id": 3, "typ": "22", "hoehe_cm": 60, "laenge_cm": 100},
+            ]
+        )
+        self.assertEqual(f[1], 1.0)
+        self.assertEqual(f[2], 2.0)
+        self.assertEqual(f[3], round(2065 / 407, 4))
+
+
 if __name__ == "__main__":
     unittest.main()

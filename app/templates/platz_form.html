@@ -42,6 +42,9 @@
     <div><label for="hoehe_cm">Höhe (cm)</label><input id="hoehe_cm" name="hoehe_cm" inputmode="decimal" value="{{ platz.hoehe_cm|zahl(0) if platz.hoehe_cm else '' }}"></div>
     <div><label for="laenge_cm">Länge (cm)</label><input id="laenge_cm" name="laenge_cm" inputmode="decimal" value="{{ platz.laenge_cm|zahl(0) if platz.laenge_cm else '' }}"></div>
   </div>
+  <label for="leistung_w">Normwärmeleistung in Watt (optional, ersetzt Typ/Höhe/Länge bei der Bewertung)</label>
+  <input id="leistung_w" name="leistung_w" inputmode="decimal" value="{{ platz.leistung_w|zahl(0) if platz.leistung_w else '' }}" placeholder="z. B. 407">
+  <p class="klein">Nur verwenden, wenn die Wattzahl bei allen Heizkörpern aus derselben Quelle und mit denselben Bedingungen stammt (z. B. Normleistung nach EN 442, 75/65/20 °C).</p>
   <label for="kc_manuell">Bewertungsfaktor manuell (optional, überschreibt die Berechnung)</label>
   <input id="kc_manuell" name="kc_manuell" inputmode="decimal" value="{{ platz.kc_manuell or '' }}">
 

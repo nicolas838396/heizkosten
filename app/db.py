@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS platz (
     hoehe_cm REAL,
     laenge_cm REAL,
     kc_manuell REAL,
+    leistung_w REAL,
     geraet_id TEXT UNIQUE,
     aes_key TEXT NOT NULL DEFAULT '',
     notiz TEXT NOT NULL DEFAULT '',
@@ -152,10 +153,18 @@ def connect() -> sqlite3.Connection:
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys=ON")
     con.executescript(SCHEMA)
+    _migrate(con)
     if fresh:
         _seed_defaults(con, demo=demo_active())
     con.commit()
     return con
+
+
+def _migrate(con: sqlite3.Connection) -> None:
+    """Aeltere Datenbanken um neue Spalten ergaenzen."""
+    spalten = {r["name"] for r in con.execute("PRAGMA table_info(platz)")}
+    if "leistung_w" not in spalten:
+        con.execute("ALTER TABLE platz ADD COLUMN leistung_w REAL")
 
 
 def _seed_defaults(con: sqlite3.Connection, demo: bool) -> None:

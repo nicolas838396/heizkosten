@@ -292,6 +292,7 @@ def create_app() -> Flask:
             "hoehe_cm": zahl_oder_none(form.get("hoehe_cm")),
             "laenge_cm": zahl_oder_none(form.get("laenge_cm")),
             "kc_manuell": zahl_oder_none(form.get("kc_manuell")),
+            "leistung_w": zahl_oder_none(form.get("leistung_w")),
             "geraet_id": geraet_id,
             "aes_key": db.normalize_key(form.get("aes_key", "")),
             "notiz": form.get("notiz", "").strip(),
@@ -312,8 +313,8 @@ def create_app() -> Flask:
             try:
                 g.con.execute(
                     "INSERT INTO platz (typ, wohnung_id, raum, bezeichnung, heizkreis, hkv_typ, hoehe_cm, laenge_cm, "
-                    "kc_manuell, geraet_id, aes_key, notiz, erstellt) VALUES (:typ, :wohnung_id, :raum, :bezeichnung, "
-                    ":heizkreis, :hkv_typ, :hoehe_cm, :laenge_cm, :kc_manuell, :geraet_id, :aes_key, :notiz, :erstellt)",
+                    "kc_manuell, leistung_w, geraet_id, aes_key, notiz, erstellt) VALUES (:typ, :wohnung_id, :raum, :bezeichnung, "
+                    ":heizkreis, :hkv_typ, :hoehe_cm, :laenge_cm, :kc_manuell, :leistung_w, :geraet_id, :aes_key, :notiz, :erstellt)",
                     {**d, "erstellt": db.now_iso()},
                 )
             except sqlite3.IntegrityError:
@@ -336,7 +337,7 @@ def create_app() -> Flask:
                 g.con.execute(
                     "UPDATE platz SET typ=:typ, wohnung_id=:wohnung_id, raum=:raum, bezeichnung=:bezeichnung, "
                     "heizkreis=:heizkreis, hkv_typ=:hkv_typ, hoehe_cm=:hoehe_cm, laenge_cm=:laenge_cm, "
-                    "kc_manuell=:kc_manuell, geraet_id=:geraet_id, aes_key=:aes_key, notiz=:notiz WHERE id=:id",
+                    "kc_manuell=:kc_manuell, leistung_w=:leistung_w, geraet_id=:geraet_id, aes_key=:aes_key, notiz=:notiz WHERE id=:id",
                     {**d, "id": pid},
                 )
             except sqlite3.IntegrityError:

@@ -44,10 +44,16 @@ def normwaermeleistung_watt(typ: str, hoehe_cm: float, laenge_cm: float) -> floa
 
 
 def bewertungsfaktoren(heizkoerper: list[dict]) -> dict:
-    """heizkoerper: [{'id', 'typ', 'hoehe_cm', 'laenge_cm'}] -> {id: faktor}, kleinster = 1,0."""
+    """heizkoerper: [{'id', 'typ', 'hoehe_cm', 'laenge_cm', 'leistung_w'}] -> {id: faktor}.
+
+    Ist 'leistung_w' (Normwaermeleistung in Watt, z. B. vom Typenschild oder Datenblatt)
+    angegeben, gilt sie. Sonst wird aus Typ, Hoehe und Laenge genaehert. Kleinster = 1,0."""
     leistungen = {}
     for hk in heizkoerper:
         try:
+            if hk.get("leistung_w"):
+                leistungen[hk["id"]] = float(hk["leistung_w"])
+                continue
             leistungen[hk["id"]] = normwaermeleistung_watt(
                 hk["typ"], float(hk["hoehe_cm"]), float(hk["laenge_cm"])
             )
