@@ -2,9 +2,11 @@
 {% block titel %}{{ 'Platz bearbeiten' if platz.id else 'Neuer Platz' }}{% endblock %}
 {% block inhalt %}
 <h1>{{ 'Platz bearbeiten' if platz.id else 'Neuer Platz' }}</h1>
-<p class="sub">Alle Angaben lassen sich später ändern.</p>
+{% set fest = platz.fest_key %}
+<p class="sub">{% if fest %}Dieser Platz ist fest hinterlegt (nur Ansicht). Du kannst Geräte-Nummer, Schlüssel und Notiz eintragen.{% else %}Alle Angaben lassen sich später ändern.{% endif %}</p>
 
 <form method="post" class="card">
+  <fieldset {{ 'disabled' if fest }} style="border:0;padding:0;margin:0;min-width:0">
   <div class="row2">
     <div>
       <label for="typ">Art</label>
@@ -48,6 +50,8 @@
   <label for="kc_manuell">Bewertungsfaktor manuell (optional, überschreibt die Berechnung)</label>
   <input id="kc_manuell" name="kc_manuell" inputmode="decimal" value="{{ platz.kc_manuell or '' }}">
 
+  </fieldset>
+
   <h2>Gerät</h2>
   <label for="geraet_id">Geräte-Nummer</label>
   <input id="geraet_id" name="geraet_id" class="mono" value="{{ platz.geraet_id or '' }}" placeholder="8-stellige Nummer vom Aufkleber" list="frei" autocomplete="off">
@@ -64,7 +68,7 @@
     {% if platz.id %}<a class="btn sek" href="{{ url_for('messwerte', pid=platz.id) }}">Messwerte</a>{% endif %}
   </div>
 </form>
-{% if platz.id %}
+{% if platz.id and not fest %}
 <form method="post" action="{{ url_for('platz_loeschen', pid=platz.id) }}" onsubmit="return confirm('Diesen Platz wirklich löschen?')">
   <button class="btn gefahr" type="submit">Platz löschen</button>
 </form>

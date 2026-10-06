@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS platz (
     laenge_cm REAL,
     kc_manuell REAL,
     leistung_w REAL,
+    fest_key TEXT UNIQUE,
     geraet_id TEXT UNIQUE,
     aes_key TEXT NOT NULL DEFAULT '',
     notiz TEXT NOT NULL DEFAULT '',
@@ -141,6 +142,11 @@ def set_demo(active: bool) -> None:
         os.remove(demo_flag_path())
 
 
+def fest_aktiv() -> bool:
+    """Feste Stammdaten aktiv (Normalbetrieb). Demo und HEIZKOSTEN_STAMMDATEN=0 schalten sie ab."""
+    return not demo_active() and os.environ.get("HEIZKOSTEN_STAMMDATEN", "1") != "0"
+
+
 def db_path() -> str:
     return os.path.join(DATA_DIR, "demo.db" if demo_active() else "heizkosten.db")
 
@@ -156,6 +162,10 @@ def connect() -> sqlite3.Connection:
     _migrate(con)
     if fresh:
         _seed_defaults(con, demo=demo_active())
+    if fest_aktiv():
+        from . import stammdaten
+
+        stammdaten.sync(con)
     con.commit()
     return con
 
@@ -165,6 +175,9 @@ def _migrate(con: sqlite3.Connection) -> None:
     spalten = {r["name"] for r in con.execute("PRAGMA table_info(platz)")}
     if "leistung_w" not in spalten:
         con.execute("ALTER TABLE platz ADD COLUMN leistung_w REAL")
+    if "fest_key" not in spalten:
+        con.execute("ALTER TABLE platz ADD COLUMN fest_key TEXT")
+        con.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_platz_fest ON platz (fest_key)")
 
 
 def _seed_defaults(con: sqlite3.Connection, demo: bool) -> None:
@@ -179,11 +192,6 @@ def _seed_defaults(con: sqlite3.Connection, demo: bool) -> None:
         con.execute(
             "INSERT OR IGNORE INTO wohnung (id, bezeichnung, sort) VALUES (?, ?, ?)",
             (wid, bez, sort),
-        )
-    for kreis in ("1", "2"):
-        con.execute(
-            "INSERT INTO platz (typ, raum, bezeichnung, heizkreis, erstellt) VALUES ('WMZ', 'Heizungsraum', ?, ?, ?)",
-            (f"Waermemengenzaehler Heizkreis {kreis}", kreis, now_iso()),
         )
 
 

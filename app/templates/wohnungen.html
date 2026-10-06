@@ -4,6 +4,15 @@
 <h1>Wohnungen &amp; Flächen</h1>
 <p class="sub">Die Wohnfläche bestimmt den Grundkostenanteil. Die Reihenfolge steuert die Anzeige.</p>
 
+{% if fest %}
+<div class="card">
+  {% for w in rows %}
+    <div class="zeile"><div class="l"><div class="titel">{{ w.bezeichnung }}</div><div class="meta">{{ w.plaetze }} Plätze</div></div>
+    <div class="r">{% if w.flaeche_qm %}<strong>{{ w.flaeche_qm|zahl(2) }} m²</strong>{% else %}<span class="badge">Fläche fehlt noch</span>{% endif %}</div></div>
+  {% endfor %}
+  <p class="klein">Beheizte Wohnfläche ohne Balkone. Diese Werte sind fest hinterlegt und werden nur im Programmcode geändert.</p>
+</div>
+{% else %}
 <form method="post" class="card">
   {% for w in rows %}
     <div style="padding:10px 0;border-bottom:1px solid var(--line)">
@@ -33,4 +42,5 @@
   <button class="btn gefahr klein" type="submit">{{ w.id }} löschen</button>
 </form>
 {% endfor %}
+{% endif %}
 {% endblock %}

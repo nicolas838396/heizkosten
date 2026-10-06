@@ -215,3 +215,39 @@ class WebTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FesteStammdatenTests(unittest.TestCase):
+    def setUp(self):
+        os.environ["HEIZKOSTEN_STAMMDATEN"] = "1"
+        db.set_demo(False)
+        for name in ("heizkosten.db", "demo.db", "passwort.txt", "benutzer.txt"):
+            p = os.path.join(_TMP, name)
+            if os.path.exists(p):
+                os.remove(p)
+        self.c = create_app().test_client()
+
+    def tearDown(self):
+        os.environ["HEIZKOSTEN_STAMMDATEN"] = "0"
+
+    def test_keller_vorhanden_und_gesperrt(self):
+        con = db.connect()
+        rows = con.execute("SELECT * FROM platz WHERE typ='HKV' AND wohnung_id='KELLER' ORDER BY fest_key").fetchall()
+        self.assertEqual([r["leistung_w"] for r in rows], [407, 1627])
+        pid = rows[0]["id"]
+        con.close()
+        # Stammdaten lassen sich nicht aendern, Geraet schon
+        r = self.c.post(f"/platz/{pid}", data={"raum": "X", "leistung_w": "1", "geraet_id": "12345678", "notiz": "n"})
+        self.assertEqual(r.status_code, 302)
+        con = db.connect()
+        p = con.execute("SELECT * FROM platz WHERE id=?", (pid,)).fetchone()
+        self.assertEqual((p["raum"], p["leistung_w"], p["geraet_id"]), ("Bad", 407, "12345678"))
+        con.close()
+        self.c.post(f"/platz/{pid}/loeschen")
+        self.c.post("/platz/neu", data={"typ": "HKV"})
+        con = db.connect()
+        self.assertEqual(con.execute("SELECT COUNT(*) FROM platz WHERE typ='HKV'").fetchone()[0], 2)
+        self.assertEqual(con.execute("SELECT COUNT(*) FROM platz WHERE typ='WMZ'").fetchone()[0], 2)
+        con.close()
+        self.assertEqual(self.c.get(f"/platz/{pid}").status_code, 200)
+        self.assertEqual(self.c.get("/wohnungen").status_code, 200)

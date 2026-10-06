@@ -171,6 +171,7 @@ def create_app() -> Flask:
         con = g.get("con")
         return {
             "demo": db.demo_active(),
+            "fest": db.fest_aktiv(),
             "dirty": bool(con and db.get_setting(con, "config_dirty", "") == "1"),
             "nav": [
                 ("index", "Übersicht"),
@@ -308,6 +309,9 @@ def create_app() -> Flask:
 
     @app.route("/platz/neu", methods=["GET", "POST"])
     def platz_neu():
+        if db.fest_aktiv():
+            flash("Die Plätze sind fest hinterlegt und lassen sich in der App nicht ändern.", "fehler")
+            return redirect(url_for("plaetze"))
         if request.method == "POST":
             d = _platz_formdaten(request.form)
             try:
@@ -331,6 +335,19 @@ def create_app() -> Flask:
         row = g.con.execute("SELECT * FROM platz WHERE id = ?", (pid,)).fetchone()
         if row is None:
             abort(404)
+        if request.method == "POST" and row["fest_key"]:
+            geraet = db.normalize_id(request.form.get("geraet_id", "")) or None
+            try:
+                g.con.execute(
+                    "UPDATE platz SET geraet_id=?, aes_key=?, notiz=? WHERE id=?",
+                    (geraet, db.normalize_key(request.form.get("aes_key", "")), request.form.get("notiz", "").strip(), pid),
+                )
+            except sqlite3.IntegrityError:
+                flash("Diese Geräte-Nummer ist schon einem anderen Platz zugeordnet.", "fehler")
+                return render_template("platz_form.html", **_form_ctx(dict(row))), 400
+            markiere_dirty()
+            flash("Gespeichert.", "ok")
+            return redirect(url_for("plaetze"))
         if request.method == "POST":
             d = _platz_formdaten(request.form)
             try:
@@ -350,6 +367,10 @@ def create_app() -> Flask:
 
     @app.route("/platz/<int:pid>/loeschen", methods=["POST"])
     def platz_loeschen(pid):
+        fest = g.con.execute("SELECT fest_key FROM platz WHERE id = ?", (pid,)).fetchone()
+        if fest and fest["fest_key"]:
+            flash("Dieser Platz ist fest hinterlegt und kann nicht gelöscht werden.", "fehler")
+            return redirect(url_for("plaetze"))
         g.con.execute("DELETE FROM platz WHERE id = ?", (pid,))
         markiere_dirty()
         flash("Platz gelöscht (empfangene Messwerte bleiben erhalten).", "ok")
@@ -397,6 +418,8 @@ def create_app() -> Flask:
 
     @app.route("/plaetze/schnell", methods=["POST"])
     def plaetze_schnell():
+        if db.fest_aktiv():
+            return redirect(url_for("plaetze"))
         text = request.form.get("liste", "")
         eintraege = schnell.parse(text)
         if not eintraege:
@@ -427,6 +450,9 @@ def create_app() -> Flask:
 
     @app.route("/wohnungen", methods=["GET", "POST"])
     def wohnungen():
+        if request.method == "POST" and db.fest_aktiv():
+            flash("Die Wohnungen und Flächen sind fest hinterlegt.", "fehler")
+            return redirect(url_for("wohnungen"))
         if request.method == "POST":
             for w in g.con.execute("SELECT id FROM wohnung").fetchall():
                 wid = w["id"]
@@ -448,10 +474,12 @@ def create_app() -> Flask:
             "SELECT w.*, (SELECT COUNT(*) FROM platz p WHERE p.wohnung_id = w.id) AS plaetze "
             "FROM wohnung w ORDER BY sort, id"
         ).fetchall()
-        return render_template("wohnungen.html", rows=rows)
+        return render_template("wohnungen.html", rows=rows, fest=db.fest_aktiv())
 
     @app.route("/wohnung/neu", methods=["POST"])
     def wohnung_neu():
+        if db.fest_aktiv():
+            return redirect(url_for("wohnungen"))
         bez = request.form.get("bezeichnung", "").strip()
         if not bez:
             flash("Bezeichnung angeben.", "fehler")
@@ -464,6 +492,8 @@ def create_app() -> Flask:
 
     @app.route("/wohnung/<wid>/loeschen", methods=["POST"])
     def wohnung_loeschen(wid):
+        if db.fest_aktiv():
+            return redirect(url_for("wohnungen"))
         g.con.execute("DELETE FROM wohnung WHERE id = ?", (wid,))
         flash("Wohnung gelöscht; ihre Plätze sind jetzt ohne Wohnung.", "ok")
         return redirect(url_for("wohnungen"))
