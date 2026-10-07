@@ -42,8 +42,8 @@ python3 -m unittest discover -s tests -t .
 
 ```
 cd ~/heizkosten && git pull
-bash deploy/gast.sh bruder 8080
-sudo passwd bruder
+bash deploy/gast.sh domi 8080
+sudo passwd domi
 ```
 Der Benutzer hat keine Administratorrechte, kann die Heizungs-App und ihre Daten nicht sehen
-und darf nur seinen eigenen Dienst `gast-bruder` starten, stoppen und neu starten.
+und darf nur seinen eigenen Dienst `gast-domi` starten, stoppen und neu starten.

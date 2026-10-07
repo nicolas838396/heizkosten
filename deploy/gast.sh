@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Richtet einen eingeschraenkten Benutzer samt eigenem Dienst fuer ein zweites Programm ein.
-# Aufruf: bash deploy/gast.sh <name> [port]      (z. B. bash deploy/gast.sh bruder 8080)
+# Aufruf: bash deploy/gast.sh <name> [port]      (z. B. bash deploy/gast.sh domi 8080)
 #
 # Der Gast kann: sich per SSH anmelden, in seinem Ordner programmieren, Pakete in seinem
 # Ordner installieren (pip/npm), seinen eigenen Dienst starten/stoppen/neu starten und dessen Log lesen.
