@@ -29,7 +29,7 @@ sudo chmod 750 "/home/$NAME"
 
 # 2. Heizungs-App und ihre Daten vor dem Gast verschliessen
 sudo chmod 700 "/home/$BESITZER"
-[ -d /var/lib/heizkosten ] && sudo chmod -R go-rwx /var/lib/heizkosten
+bash "$(dirname "$0")/rechte.sh"
 
 # 3. Start-Skript des Gastes (das darf er selbst aendern, ohne Root)
 sudo -u "$NAME" mkdir -p "/home/$NAME/app"
