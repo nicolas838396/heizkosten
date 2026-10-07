@@ -37,3 +37,13 @@ Wärmemengenzähler für das Warmwasser: als Platz mit Heizkreis `WW` anlegen (F
 ```bash
 python3 -m unittest discover -s tests -t .
 ```
+
+## Zweiter Benutzer fuer ein weiteres Programm
+
+```
+cd ~/heizkosten && git pull
+bash deploy/gast.sh bruder 8080
+sudo passwd bruder
+```
+Der Benutzer hat keine Administratorrechte, kann die Heizungs-App und ihre Daten nicht sehen
+und darf nur seinen eigenen Dienst `gast-bruder` starten, stoppen und neu starten.
